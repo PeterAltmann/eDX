@@ -5,7 +5,7 @@
 
 *Learn how to develop blockchain-based, production-ready, decentralized identity applications using verifiable credentials with Hyperledger Aries in this free course.*
 
-[test](/~/Documents/Online-Courses/LFS173x/README.md#-test2)
+[test](https://github.com/PeterAltmann/eDX/blob/main/LFS173x/README.md#test2)
 
 Data is driving our world today. However, we hear about data breaches and identity thefts all the time. Trust on the Internet is broken, and it needs to be fixed. As such, it is imperative that we adopt a new approach to identity management, and ensure data security and user privacy through tamper-proof transactions and infrastructures.
 
