@@ -254,3 +254,105 @@ The instructions for running the lab can be found on [GitHub](https://github.com
 Additional sources:
 * [Verifiable Credential Authentication via OpenID Connect](https://github.com/bcgov/vc-authn-oidc/blob/main/docs/README.md)
 * [IAM Authentication using VC](https://docs.google.com/presentation/d/150n2PikoshbQB46QDMO3xpWFVLdcsoJNey0MVtCbGvk/edit#slide=id.p)
+
+
+## An Aries Ecosystem
+
+All of the examples of Aries agents in the previous section can be built and operated independently by different organizations because of the common protocols upon which Aries agents communicate, as pictured below.
+
+* Some of the Aries agents are run by large enterprises (such as Faber College) that have a publicly accessible endpoint to which other agents can initiate connections.
+* Other agents are owned by small businesses (such as the pub where Alice goes for Trivia Night) that might not be sufficiently IT-savvy to run their own agents. They might use an Agency-as-a-Service offered by a vendor that allows them to easily configure their agent to, for example, verify certain types of credentials.
+* Mobile wallet applications, such as the one you used in the first lab, run on smartphones.
+* Since mobile applications cannot have their own physical endpoint, it is not possible for an enterprise agent (such as Faber’s agent) to send a message directly to a mobile wallet. Rather, each mobile wallet must have routing agents that give other agents a physical endpoint to which they can send messages destined for the wallet. We’ll cover this in detail in the course chapter on mobile wallets and routing.
+
+An Aries ecosystem consists of both the Aries agents that message one another to exchange verifiable credentials and an understanding of the verifiable credential types that are being issued, held, proven and verified. The off-campus store that is providing discounts to students because they have a student ID verifiable credential must know that Faber College is issuing the credential and the meaning of the various data elements ("claims") in the credential. To put that into Trust over IP (ToIP) terms, all the participants have to know both the technical and governance elements of the ecosystem—the ToIP Dual Stack.
+
+The agents in an Aries ecosystem share many attributes:
+
+* They all have secure storage for keys.
+* They all have some secure storage for other data related to their role as an agent.
+* Each interacts with other agents using secure, peer-to-peer messaging protocols.
+* Most connect with ledger(s) to write (issuers) and read (holders, provers and verifiers) decentralized identifiers (DIDs) and verifiable credential metadata.
+* Most process (issue, hold, prove and verify) verifiable credentials (although routing agents may not).
+* They all have an associated mechanism to provide "business rules" to control the behavior of the agent:
+ - Often a person (via a user interface) for phone, tablet, laptop, etc.-based wallet agents.
+ - Often a backend enterprise system for enterprise agents. The backend system may have request handling workflows that include people.
+ - For routing agents the "rules" are usually limited to the forwarding of messages to other agents. Such routing agents are usually fully automated.
+
+
+ While there can be many agent variations, the most common ones are:
+
+* Agents for people.
+* Agents for organizations.
+* Agents for routing messages to and from agents for people and organizations.
+
+A significant emerging use case that we’ve not covered in this section are agents embedded within or associated with IoT devices. In the common IoT case, IoT device agents are just variants of other agents, connected to the rest of the ecosystem through a server-based agent. All the same principles apply. For example, IoT devices might include a sensor to measure something (such as greenhouse gas emissions at a factory) and emitting the data by issuing verifiable credentials, ensuring that the data cannot be tampered with after generation. This provides a foundation of trust about the captured data—if the device itself can be trusted. Such trust might be accomplished by third-party auditors or government regulators certifying the operation of the device, and hence the validity of the issued verifiable credentials.
+
+## Ledgers and Verifiable Credential Formats in an Aries Ecosystem
+
+The vast majority of Aries agents connect with a distributed ledger (and sometimes several) to read and write the data necessary to share verifiable credentials and presentations. In the diagram below, the issuer, holder and verifier use the verifiable data registry (as defined in the W3C Verifiable Credential standard), which is often implemented as a distributed ledger as the basis for issuing and presenting verifiable data. Early Aries agents used both Hyperledger Indy ledgers (such as the Sovrin MainNet) and the Indy verifiable credential format, called Anonymous Credentials (AnonCreds). As of the updating of this course (mid 2021), a significant shift has begun to building Aries agents that can use other types of verifiable credentials, specifically those based on the W3C Verifiable Credential standard, as well as use data from other ledgers. Interestingly, the architecture and operation of an Aries agent is the same regardless of the verifiable credential format or the ledger used. As such, in this course, we will mostly use the more mature Aries+Indy combination in the labs as we establish the foundational concepts. However, we’ll also highlight the differences in using other verifiable credential formats and point out where other ledgers can be used. There is also a lab or two where you can get hands-on with some non-Indy-based use cases.
+
+<img
+  src="https://miro.medium.com/max/1838/1*39dEx0Ta2LvmQuPUclqOMA.png"
+  alt="VC model"
+  width="600"
+/>
+
+## The Logical Components of an Aries Agent
+
+All Aries agent deployments have two logical components: a **framework** and a **controller**.
+
+The framework contains the standard capabilities that enable an Aries agent to interact with its surroundings—ledgers, storage, verifiable credentials, presentations and other agents. As an Aries application developer, a framework is an artifact of Aries that you don’t have to create or maintain, you just embed it in your solution. An Aries framework knows how to initiate connections, respond to requests, send messages, manage secure storage and more. However, a framework needs to be told *when* to initiate a connection or to send a request. It doesn’t know *what* response should be sent to a given request. A deployed framework just sits there until it’s told what to do.
+
+The controller is the component that, well, controls the behaviour of an instance of an Aries framework—the business rules for that particular agent instance. The controller is the part of a deployment that you, an Aries developer, build to create an Aries agent that handles your use case. For example:
+
+* In a mobile application, the controller is the user interface and how the person interacts with the user interface. As events come in, the user interface shows the person their options, and after input from the user, tells the framework how to respond to the event.
+* An issuer, such as Faber College’s agent, has a controller that integrates agent capabilities (requesting proofs, verifying them, issuing credentials and so on) with enterprise systems, such as a "Student Information System" that tracks students and their grades. When Faber’s agent is interacting with Alice’s, and Alice’s requests an "I am a Faber Graduate" credential, it’s the controller that figures out if Alice has earned such a credential, and if so, what claims should be put into the credential. The controller also directs the agent to issue the credential.
+
+## Aries Agent Architecture (ACA-Py)
+
+The diagram below is an example of an Aries agent architecture, as exemplified by Aries Cloud Agent-Python (ACA-Py):
+
+<img src = "https://courses.edx.org/assets/courseware/v1/625bf4cc7d88cbb4a65143c4fa426933/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-01.png" alt = "Aries Agent Architecture ACA-Py" width = "500"
+/>
+
+The framework provides all of the core Aries functionality such as interacting with other agents and the ledger, managing secure storage, sending event notifications to, and receiving instructions from the controller. The controller executes the business logic that defines how that particular agent instance behaves—how it responds to the events it receives, and when to initiate events. The controller might be a web or native user interface for a person or it might be coded business rules driven by an enterprise system.
+
+Between the two is a pair of interfaces:
+
+* When the framework receives a message (an event) from the outside world, it sends a webhook (a notification) about the event to the controller so the controller can decide what to do.
+* In turn, the controller sends a request to the framework to tell the framework how to respond to the event.
+ - The same controller-to-framework request interface is used when the controller wants the framework to initiate an action, such as sending a message to another agent.
+
+
+What that means for an Aries developer is that the framework you use is a complete dependency that you include in your application. You don’t have to build it yourself. It is the controller that gives your agent its unique personality. Thus, the vast majority of Aries developers focus only on building controllers, while paying little attention to the internals of the Aries framework they are using.
+
+Further easing the learning curve for controller development is that its event driven processing is almost identical to web development. The controller sits waiting for an event. When received, the event type is determined, it is dispatched for processing, and back into the event loop we go.
+
+Of course, since Aries frameworks are both evolving and open source, if your agent needs a feature that is not in the framework you are using, you are welcome to do some Aries framework development and contribute the feature to Hyperledger. We’d really like it if you did!
+
+## Agent Terminology Confusion
+
+In many places in the Aries community, the "agent framework" term we are using here is shortened to "agent." That creates some confusion as you can say "an Aries agent consists of an agent and a controller." Ugh… Throughout the course we have tried to make it clear when we are talking about the whole agent versus just the framework. Often we will use the name of a specific framework (e.g., Aries Cloud Agent Python or ACA-Py) to make it clear the context of the term. However, as a developer, you should be aware that in the community, the term "agent" is sometimes used just for the agent framework component and sometimes for the combined framework+controller. Naming is hard...
+
+## Aries Agent Internals and Protocols
+
+In this section, we’ll cover, at a high level, the internals of Aries agents and how Aries agent messaging protocols are handled.
+
+The most basic function of an Aries agent is to enable (on behalf of its controlling entity) secure, encrypted messaging with other agents. Here’s an overview of how that happens:
+
+* Faber and Alice have running agents.
+* Somehow (we’ll get to that) Faber’s agent discovers Alice’s agent and sends it an invitation (yes, we’ll get to that too!) to connect.
+ - The invitation is in plaintext (often presented as a QR code) and includes information on how a message can be encrypted and securely sent by Alice’s agent to Faber’s.
+* Alice’s agent (after conferring with Alice—"Do you want to do this?") creates a private DID for the relationship and embeds it in a "request to connect" message it sends to Faber’s agent.
+ - This message is not plaintext. It uses information from the invitation to securely send the encrypted message back to Faber’s agent.
+* Faber’s agent associates the message from Alice’s agent with the invitation that was sent to Alice and confers with Faber’s backend system about what to do with the request.
+* Assuming Faber agrees, its agent stores Alice’s connection information, creates a private DID for the relationship, and sends an encrypted response message to Alice’s agent.
+ - Whoohoo! The agents are connected.
+* Using its agent, Faber can now send a message to Alice (via their agents, of course) and vice versa. The messages use the newly established encrypted communication channel and so are both private and secure.
+
+### Lab: Agents Connecting
+
+Let’s run through a live code example of two Aries agents using a protocol to connect and send messages to one another.
+
+Follow this [link](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/agentsConnecting.md) to try it yourself and explore the code in the example.
