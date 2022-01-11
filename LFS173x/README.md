@@ -809,6 +809,8 @@ Although the did:key template process is based on some pretty simple text proces
 
 Please follow this [link](https://github.com/cloudcompass/ToIPLabs/blob/main/docs/LFS173xV2/didResolvers.md) to run a lab in which you try out a couple of DID resolvers, including one built into an instance of ACA-Py.
 
+**NOTE**: There is a `did:ebsi` resolver. Most did methods are broken or no longer supported. I am not sure how to create a did and DIDDoc without simply implementing the specs. I will try https://github.com/sicpa-dlab/acapy-resolver-universal later when using ACA-Py
+
 
 ## Knowledge Check 3
 1. Which of the following is **not** true about von-network?
@@ -827,3 +829,224 @@ Please follow this [link](https://github.com/cloudcompass/ToIPLabs/blob/main/doc
   3. A genesis file contains cryptographic material
   4. A genesis file contains information about a trustee DID that has write permission to the ledger
   - B. A genesis file specific to the ledger to which the agent is connecting must be available to an agent.
+
+## Summary
+
+The main point of this chapter is to get you started in the right spot: you don’t need to dig deep into distributed ledger technology in order to develop SSI applications. By now, you should be aware of the options running an Indy network and know the importance of the genesis file for your particular network. We also covered some of the new options for publishing DIDs to other than a Hyperledger Indy network when not using Indy AnonCreds verifiable credentials. If you are using AnonCreds, you will want to stick to using an Indy network. Finally, we went over a powerful DID method that doesn’t use a ledger at all and makes plain public keys way more useful, the "did:key" DID method.
+
+In the last chapter, we covered the architecture of an agent and demonstrated connecting two agents that didn’t use a ledger. In this chapter, we covered running a ledger. So, in the next chapter, let’s combine the two and look at running agents that connect to a ledger.
+
+# Chapter 4 Developing Aries controllers
+
+## Overview
+
+In the second chapter, we ran two simple command line agents that connected and communicated with one another. In the third chapter, we went over running a local ledger. In this chapter, we’ll go into details about how you can build a controller by running agents that connect, communicate and use a ledger to enable the issuing of credentials and the presentation of proofs. For developers wanting to build applications on top of Aries and Indy, this chapter is the core of what you need to know and is presented mostly as a series of labs.
+
+We will learn about controllers by looking at [aries-cloudagent-python (ACA-Py)](https://github.com/hyperledger/aries-cloudagent-python) in all the examples. Don’t worry if you are not a Python guru as with ACA-Py, a controller can be written in any language. ACA-Py is not suitable for use as a mobile wallet app, so we’ll leave the wallet discussion until Chapter 7. In the last section of this chapter, we’ll cover controllers for other Aries open source frameworks. As you’ll discover, the concepts are similar across the frameworks.
+
+In this chapter, you will learn:
+
+* What an agent needs to know at startup.
+* How protocols impact the structure and role of controllers.
+* About the aries-cloudagent-python (ACA-Py) framework versus other Aries frameworks (such as aries-framework-dotnet and aries-framework-go).
+
+The goal of this chapter is to give you the knowledge you’ll need to build your own controller using the framework of your choice. Succeed and you’ll be an Aries developer!
+
+## The Wallet
+
+In the prerequisite course, "Introduction to Hyperledger Sovereign Identity Blockchain Solutions: Indy, Aries and Ursa" (LFS172x), we talked about the term "wallet" as a mobile application that is like a physical wallet, holding money, verifiable credentials and important papers. This is the definition the Aries community would like to use. Unfortunately, the term has historically had a second meaning in the Indy developer community, and it’s a term that developers in Aries and Indy still use. In Indy, the term "wallet" is also used for the secure storage (introduced in Chapter 1) part of an Indy agent, the place in the agent where DIDs, keys, ledger objects and credentials reside. That definition is still in common use in the source code that developers see in Indy and Aries.
+
+So, while the Indy meaning of the term wallet is being eliminated in Aries, because of the use of the existing Indy components in current Aries code (at least at the time of writing this course), we’re going to have to use the Indy meaning for the term wallet: *an agent’s local, secure storage*. We’ll also use the term "secure storage" to mean the same thing as we do in the rest of the course.
+
+<img src= 'https://courses.edx.org/assets/courseware/v1/cbe95bfbd74ccf88b905b7b6d57e1adb/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-27_v2.png' alt = 'The term wallet' width=400>
+
+## Agent start up
+
+An Aries agent needs to know a lot of configuration information as it starts up. For example, it needs to know:
+
+* The location of the genesis file(s) for the ledger(s) it will use (if any).
+* If it needs objects (DIDs, schema, etc.) on the ledger, checking that they exist on ledger and in secure storage, and creating those objects if they don’t exist.
+* Transport (such as HTTP or web sockets) endpoints for messaging other agents.
+* Storage options for keys and other data.
+* Interface details between the agent framework and the controller for events and requests.
+
+These are concepts we’ve talked about earlier and that you should recognize. Need a reminder? Checkout the "Aries Agent Architecture" section of Chapter 2. We’ll talk about these and other configuration items in this chapter and the next.
+
+## Command Line Interface
+
+All Aries agent frameworks will have a number of configuration options that must be set to run an instance in a specific scenario. At minimum, the agent must know about things such as how to access a database for secure storage, how to connect to a ledger, how to interact with the controller, and so on. So, one of the first things you’ll need to know is how to set the configuration options for your agent. Let’s look at how ACA-Py handles agent configuration.
+
+Most of the options for an ACA-Py instance are configured using command line options in the form of `--option <extra info>`. For example, to specify the name of the genesis file the agent is to use, the command line option is `--genesis-file <genesis-file>`. The number of startup options and the frequency with which new options are added are such that ACA-Py is self-documenting. In fact, plugins to ACA-Py (added via command line options!) might add new configuration options at runtime. A `--help` option is used to get the list of options for the instance of ACA-Py you are using.
+
+In addition to specifying options on the command line, ACA-Py provides two other ways to set configuration options:
+
+* Each command line option has a corresponding environment variable that can be used to set options. For example, instead of using the command line option, `--genesis-file <genesis-file>`, the environment variable `ACAPY_GENESIS_FILE` can be set to `<genesis-file>` before running the command to have the same effect. The `--help` information lists the environment variable to use for each option.
+* A YAML configuration file can be used to set any and all of the command line options. The following is a minimal YAML file that sets the genesis file for an instance of ACA-Py, including a comment to document why the option is being used. YAML files are a great way to manage and document the settings being used by an ACA-Py instance.
+
+```bash
+# Use the Indy BCovrin Test genesis file:
+genesis-file: http://test.bcovrin.vonx.io/genesis
+```
+
+**NOTE**: *If you specify the options in multiple ways, the order of precedence is command line options override environment variables override YAML file values override code defaults. ACA-Py uses the (pretty cool!) ConfigArgParse library to handle arguments.*
+
+<img src='https://courses.edx.org/assets/courseware/v1/e2ad0c181b5d68e0781df349b7455915/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-19.png' alt='Override order when specifying options' width=300>
+
+## Provision and start options
+
+An agent is a stateful component that persists data in its wallet and optionally, to a ledger. When an agent starts up for the first time, it has no persistent storage and so it must create a wallet and any ledger objects it will need to fulfill its role. When we’re developing an agent, we can do that over and over: start an agent, create its state, test it, stop it and delete it. However, when an agent is put into production, we only initialize its state once. We must be able to stop and restart it such that it finds its existing state, without having to recreate its wallet and all its contents from scratch.
+
+Because of this requirement for a one time "start from scratch" and a many times "start with data," ACA-Py provides two major modes of operation: "provision" and "start." Provision is intended to be used one time per agent instance to establish a wallet and the required ledger objects. This mode may also be used later when something new needs to be added to the wallet and ledger, such as an issuer deciding to add a new type of credential they will be issuing. Start is used for normal operations and assumes that everything is in place in the wallet and ledger. If not, it should error and stop—an indicator that something is wrong.
+
+The provision and start separation is done for security and ledger management reasons. Provisioning a new wallet often (depending on the technical environment) requires higher authority (for example, root) database credentials. Likewise, creating objects on a ledger often requires the use of a DID with more access permissions. By separating out provisioning from normal operations, those higher authority credentials do not need to be available on an ongoing basis. As well, on a production ledger such as Sovrin, there is a cost to write to the ledger. You don’t want to be accidentally writing ledger objects as you scale up and down ACA-Py instances based on load. We’ve seen instances of that and it’s no fun!
+
+We recommend the pattern of having separate provisioning and operational applications, with the operational app treating the ledger as read-only. When initializing the operational app, it should verify that all the needed objects are available in the wallet and ledger, but should error and stop if they don’t exist. At minimum, care must be taken to make sure that the same object is not created by multiple parallel running instances. During development, we recommend using a script to make it easy to run the two steps in sequence whenever they start an environment from scratch (a fresh ledger and empty wallet).
+
+The only possible exception to the "no writes in start mode" method is the handling of credential revocations, which involve ledger writes. However, that’s pretty deep into the weeds of credential management, so we won’t go further with that here. Better yet, in ACA-Py at least, revocation object handling is done entirely within ACA-Py, and controller developers don’t really have to worry about it.
+
+## Startup option groups
+
+The ACA-Py startup options are divided into a number of groups, as outlined in the following:
+
+* *Debug*: Options for development and debugging. Most (those prefixed with "auto-") implement default controller behaviors so the agent can run without a separate controller. Several options enable extra logging around specific events, such as when establishing a connection with another agent.
+* *Admin*: Options to configure the connection between ACA-Py and its controller, such as on what endpoint and port the controller should send requests. Important required parameters include if and how the ACA-Py/controller interface is secured.
+* *General*: Options about extensions (external Python modules) that can be added to an ACA-Py instance and where non-Indy objects are stored (such as connections and protocol state objects).
+* *Ledger*: Options that provide different ways for the agent to connect to a ledger.
+* *Logging*: Options for setting the level of logging for the agent and to where the logging information is to be stored.
+* *Mediation*: Options related to configuring an ACA-Py instance that is being used as an Aries mediator agent. We’ll cover mediators in Chapter 7, when we talk about mobile wallets.
+* *Multi*-tenant: Options for configuring ACA-Py to run in multi-tenant mode, where a single instance of ACA-Py serves as an agent for multiple entities.
+* *rotocol*: Options for special handling of several of the core protocols. We’ll be going into a deeper discussion of protocols in the next chapter.
+* *Start*-up: Options about profiles, a topic we’ll talk about (briefly) in the advanced ACA-Py section in the next chapter.
+* *Transport*: Options about the interfaces (such as HTTP and web sockets) that are to be used for connections and messaging with other agents.
+* *Wallet*: Options related to the storage of keys, DIDs, Indy ledger objects and credentials. This includes the type of database (e.g., SQLite or PostgreSQL) and credentials for accessing the database.
+
+**NOTE**: *While the naming and activation method of the options are specific to ACA-Py, few are exclusive to ACA-Py. Any agent, even those from other Aries frameworks, likely provide many of these options.*
+
+### Lab Agent startup options
+
+Here is a [short lab](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/ACA-PyStartup.md) to show you how you can see all of the ACA-Py startup options.
+
+The many ACA-Py startup options can be overwhelming. We’ll address that in this course by pointing out which options are used by the different sample agents.
+
+## How Aries Protocols Impact Controllers
+
+Before we get into the internals of controllers, we need to talk about Aries protocols, introduced in Chapter 5 of the prerequisite course ("Introduction to Hyperledger Sovereign Identity Blockchain Solutions: Indy, Aries and Ursa" (LFS172x)) and a subject we’ll go deep into next chapter. For now, we’ll cover just enough to understand how protocols impact the structure and role of controllers.
+
+As noted earlier, Aries agents communicate with each other via a message mechanism called DIDComm (DID Communication). DIDComm uses DIDs (specifically private, pairwise DIDs—usually) to enable secure, asynchronous, end-to-end encrypted messaging between agents, including the option of routing messages through a configuration of mediator agents. Aries agent’s DIDs used for DIDComm commonly use the did:peer DID method, which uses DIDs that are not published to a distributed ledger, but that are only shared privately between the communicating parties, usually just two agents.
+
+The caveats in the above paragraph:
+
+* An enterprise agent may use a public DID for all of its peer-to-peer messaging.
+* Agents may directly message one another without any mediator agents.
+* Most current Aries implementations using did:peer do not support rotating keys of the DID.
+* Aries AIP 1.0 and 2.0 agents use what has become known as “DIDComm V1”. DIDComm Messaging V2 is currently (mid-2021) being specified at the Decentralized Identity Foundation.
+
+Given the underlying DIDComm secure messaging layer (routing and encryption are covered in Chapter 7), Aries protocols are standard sequences of messages communicated on the messaging layer to accomplish a task. For example:
+
+* The **connection** (or **DID Exchange**) protocol enables two agents to establish a connection through a series of messages—an invitation, a connection request and a connection response.
+* The **issue credential protocol** enables an agent to issue a credential to another agent.
+* The **present proof protocol** enables an agent to request and receive a proof from another agent.
+
+Each protocol has a specification that describes and defines the protocol (an Aries RFC). Included in the specification are:
+
+* a series of messages
+* one or more roles for the different participants
+* a series of named states for each role
+* a state machine per role that defines the state transitions triggered by messages/events
+
+For example, the following table shows the messages, roles and states for the connection protocol. Each participant in an instance of a protocol tracks its state based on the messages they've seen. An agent’s state depends on its role and the most recent message received or sent by/to that agent. The details of the components of all protocols are covered in Aries [RFC 0003 (RFC 0003)](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0003-protocols).
+
+| Message            | Role of sender | State of sender |
+|--------------------|----------------|-----------------|
+| invitation         | inviter        | invited         |
+| connectionRequest  | invitee        | requested       |
+| connectionResponse | inviter        | connected       |
+| ack                | invitee        | complete        |
+
+In ACA-Py, the code for protocols is implemented as (possibly externalized) Python modules. All of the core (AIP 1.0 and AIP 2.0) protocols are in the [ACA-Py code base](https://github.com/hyperledger/aries-cloudagent-python/tree/main/aries_cloudagent/protocols) itself. External modules are not in the ACA-Py code base, but are written in such a way that they can be loaded by an ACA-Py instance at run time, allowing organizations to extend ACA-Py (and Aries) with their own protocols. Protocols implemented as external modules can be included (or not) in any given agent deployment. All protocol modules include:
+
+* The definition of a state object for the protocol.
+ - The protocol state object gets saved in secure storage while an instance of a protocol is in flight and waiting for the next event.
+* The handlers for the protocol messages.
+* The events sent to the controller on receipt of messages that are part of the protocol.
+* Administrative endpoints that are available to the controller to direct ACA-Py on what to do next for a given protocol.
+* Optional command line options for configuring the protocol.
+
+## Protocol versions AIP 1.0 and AIP 2.0
+
+As we start to get into Aries protocols, we need to talk about instances of protocols in terms of version and whether or not the protocol is part of AIP 1.0 or 2.0. In fact, in mentioning "connections," issuing credentials and presenting proofs in the last section, we hit on some of the biggest changes between AIP 1.0 and 2.0.
+
+All Aries protocols are versioned, generally starting with 1.0. Although a protocol is versioned, you can tell the version in a running Aries agent by the "type" field in messages, which includes the version, as shown in these examples:
+
+* `v1.0: https://didcomm.org/issue-credential/1.0/offer-credential`
+* `v2.0: https://didcomm.org/issue-credential/2.0/offer-credential`
+
+Protocols are versioned using the "semver" scheme that allows for major and minor version changes based on whether the changes are only additions (minor) or removals and/or changes in meaning (major). In Aries, major protocol versions are generally treated as entirely new protocols, usually with a new RFC and, within implementations, by copying and pasting the code for the old version as a starting point for the new version. Clarifications to an RFC that don’t require a change in the technical implementation of a protocol are permitted without changing the protocol version.
+
+As a reminder from Chapter 2, each AIP version is:
+
+* a specific list of RFCs (many of which are protocols)
+* a link for each RFC to a specific GitHub commit of the RFC
+
+In transitioning from AIP 1.0 to AIP 2.0, RFCs were dropped, kept and added, resulting in some protocols being updated to new major protocols versions, including the most fundamental protocols—those used for connecting agents, issuing credentials and presenting proofs.
+
+The impact on this course is that we’ll have a number of places in the rest of the content where we’ll need to indicate whether we’re using/talking about AIP 1.0 or AIP 2.0 RFCs. At key points, we’ll add a paragraph that references the RFC(s) from the other AIP version and the differences between the protocols. As you’ll see, for the protocols that changed from AIP 1.0 to 2.0, the changes are relatively subtle. The concepts are (for the most part) still the same.
+
+## Aries protocols: the controller perspective
+
+We’ve defined all of the pieces of a protocol as well as where the code lives in an Aries framework such as ACA-Py. Let’s take a look at a protocol from the controller’s perspective.
+
+Our agent has started up (an ACA-Py instance and its controller), and everything has been initialized. Some connections have been established but nothing much is going on. The controller is bored, ACA-Py is bored. Suddenly, a DIDComm message is received from another agent. It’s a credential offer message! ACA-Py starts a new instance of the "issue credential" protocol ([RFC 0036](https://github.com/hyperledger/aries-rfcs/tree/main/features/0036-issue-credential) V1/AIP 1.0 [RFC 0453](https://github.com/hyperledger/aries-rfcs/tree/main/features/0453-issue-credential-v2) V2/AIP 2.0) and we’re off and running!
+
+Here’s what happens:
+
+* The ACA-Py instance figures out what connection is involved and creates a protocol state object. It sets some data in the object based on what it received in the message and sends a webhook event (HTTP request) to the controller with information about the message and the protocol state object.
+ - This assumes that the ACA-Py instance is not set up to automatically process the offer (e.g., the option `--auto-respond-credential-offer` is not set). If that option is set, the ACA-Py instance would just handle the whole thing and the controller would just get an "all done!" webhook event, but not have to do anything else. Sigh... back to being bored.
+ - Since the ACA-Py instance doesn’t know how long the controller will take to tell it what to do next, the ACA-Py instance saves the protocol state object in its secure storage and moves on to do other things—like waiting for more agent messages.
+* The controller panics (OK, it doesn’t…). The controller code (that you wrote!) figures out what the business rules are for handling credential offers. Perhaps it just accepts (or rejects) them. Perhaps it puts the offer into a queue for a legacy app to process and tell it what to do. Perhaps it opens up a GUI and waits for a person to tell it what to do.
+ - Depending on how long it will take to decide on the answer, the controller might also need to persist the state of the in-flight protocol in a database of its own.
+* When the controller decides (or is told) what to do with the credential offer, it retrieves (if necessary) its information about the in-flight protocol and constructs an HTTP request to send the answer to the appropriate ACA-Py administrative endpoint.
+ - In this example, the controller might use the "credential_request" endpoint to request the offered credential.
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/e1784b93a2dcf23295008beadfef5c61/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-23.png' alt = "Aries protocols in ACA-Py from the controller's perspective" width = 500>
+
+* Once it has sent the request to the ACA-Py instance, the controller might persist the data about the interaction and then lounge around for a while, waiting for something else to do.
+* The ACA-Py instance receives the request from the controller and gets busy. It retrieves the corresponding protocol state object from its secure storage and constructs and sends a properly crafted "credential request" message in a DIDComm message to the other agent, the one that sent the credential offer.
+ - The ACA-Py agent then saves the protocol state object in its wallet again as it has no idea how long it will take for the other agent to respond. Then it returns to waiting for more stuff to do.
+
+ That describes what happens when a protocol is triggered by a message from another agent. A controller might also decide it needs to initiate a protocol. In that case, the protocol starts with the controller sending an initial request to the appropriate endpoint of the ACA-Py instance’s HTTP API. In either case, the behavior of the controller is the same:
+
+* Wait for an event to happen.
+* Get notified of an event either by the ACA-Py instance (via a webhook) or perhaps by some non-Aries event from, for example, a legacy enterprise app.
+* If necessary, retrieve saved information about the related business process.
+* Figure out what to do with the event:
+ - Perhaps the event ends the business process.
+ - Perhaps by asking some other software or a person to do something.
+ - Perhaps by sending a response to the event to the ACA-Py instance via the administrative API.
+* If necessary, save the state of the business process.
+* Return to waiting for the next event to come along.
+
+### Lab: Alice Gets a Credential
+
+In this section, we’ll start up two command line agents, much as we did in Chapter 2. However, this time, one of the participants, Faber College, will carry out the steps to become an issuer (including creating objects on the ledger) and issue a credential to the other participant, Alice. As a holder/prover, Alice must also connect to the ledger. Later, Faber will request a proof from Alice for claims from the credential and Alice will oblige.
+
+We’ll do a couple more versions of this interaction in subsequent labs. There is not much content to see in this chapter of the course, but there is lots in the labs themselves. Don’t skip them!
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/AliceGetsCredential.md) to access the lab.
+
+## Links to code
+
+There are a number of important things to highlight in the code from the previous lab—and in the ones to come. Make sure when you did the previous lab, that you followed the links to the key parts of the controller code. For example, in the previous lab, Alice and Faber ACA-Py agents were started and it’s helpful to know for each what ACA-Py command line parameters were used. Several of the labs that follow will include a comparable list of links that you can use to inspect and understand the code.
+
+## Knowledge check 4
+
+1. When setting the parameters of an ACA-Py framework, YAML file values take precedence over command line options. True or **False**?
+ - False. The order of precedence is command line options override environment variables override YAML file values override code defaults.
+2. What are the reasons for ACA-Py having separate "provision" and "start" modes? Select all answers that apply:
+  1. To split the parameters into groups to make them easier to understand
+  2. **For security, by limiting higher authority operations to be limited to provisioning mode**
+  3. To allow ACA-Py to automatically handle some protocols without a controller
+  4. **To prevent a full agent from inadvertently writing to a ledger that charges per write**
+  5. To specify the genesis file
+3. What does the aries-cloudagent-python (ACA-Py) framework do that the aries-framework-dotnet does not?
+4. The controllers built using the Aries frameworks with a programming language must use that language.
