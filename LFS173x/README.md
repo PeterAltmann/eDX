@@ -1038,6 +1038,24 @@ Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2
 
 There are a number of important things to highlight in the code from the previous lab—and in the ones to come. Make sure when you did the previous lab, that you followed the links to the key parts of the controller code. For example, in the previous lab, Alice and Faber ACA-Py agents were started and it’s helpful to know for each what ACA-Py command line parameters were used. Several of the labs that follow will include a comparable list of links that you can use to inspect and understand the code.
 
+## Learning the ACA-Py controller API using OpenAPI
+
+Now that you have seen some examples of a running controller, let’s get minimal. As noted earlier, ACA-Py has been implemented to expose an HTTP interface to the controller—the "Admin" interface. To make it easy (well...easier) for you to understand the Admin interface, ACA-Py automatically generates an industry standard [OpenAPI](https://www.openapis.org/) (also called Swagger) configuration. In turn, that provides a web page that you can use to see all the calls exposed by a running instance of ACA-Py, with examples and the ability to "try it"—that is, execute the available HTTP endpoints. Having an OpenAPI/Swagger definition for ACA-Py also lets you do cool things such as generate code (in your favorite language) to create a skeleton controller without any coding. If you are new to OpenAPI/Swagger, here’s a [link](https://swagger.io/docs/specification/about/) to what it is and how you can use it. The most important use: being able to quickly test something out just by spinning up an agent and using OpenAPI/Swagger.
+
+With ACA-Py, the exposed API is dynamic for the running instance. If you start an instance of ACA-Py with one or more external Python modules loaded (using the `--plugin <module>` command line parameter), those modules must add administrative endpoints to the OpenAPI/Swagger definition so that they are visible in the OpenAPI/Swagger interface.
+
+### Lab: Using ACA-Py’s OpenAPI/Swagger Interface
+
+In this lab, we’ll introduce you to the OpenAPI/Swagger interface for interacting with a running ACA-Py instance, covering how to do some querying of ACA-Py state information. In the next chapter, after we learn a little more about protocols, we’ll use the OpenAPI/Swagger interface to carry out the Faber and Alice use case.
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/OpenAPIIntroduction.md) to run the OpenAPI/Swagger introduction lab.
+
+### Lab: Help Alice get a job
+
+Time to do a little Python controller development. The next assignment is to extend the command line lab with Alice and Faber to include ACME Corporation. Alice wants to apply for a job at ACME. As part of the application process, Alice needs to prove that she has a degree. Unfortunately, the person writing the ACME agent’s controller quit just after getting started building it. Your job is to finish building the controller, deploy the agent and then walk through the steps that Alice needs to do to prove she’s qualified to work at ACME.
+
+Alice needs your help. Are you up for it? Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/HelpAliceGetAJob.md) to run the lab.
+
 ## Knowledge check 4
 
 1. When setting the parameters of an ACA-Py framework, YAML file values take precedence over command line options. True or **False**?
