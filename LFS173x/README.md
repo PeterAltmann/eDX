@@ -1050,11 +1050,58 @@ In this lab, we’ll introduce you to the OpenAPI/Swagger interface for interact
 
 Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/OpenAPIIntroduction.md) to run the OpenAPI/Swagger introduction lab.
 
-### Lab: Help Alice get a job
+### Lab: Help Alice get a job THIS IS THE LAB THAT SHOWS YOU HOW TO ADD A SCHEMA!!!
 
 Time to do a little Python controller development. The next assignment is to extend the command line lab with Alice and Faber to include ACME Corporation. Alice wants to apply for a job at ACME. As part of the application process, Alice needs to prove that she has a degree. Unfortunately, the person writing the ACME agent’s controller quit just after getting started building it. Your job is to finish building the controller, deploy the agent and then walk through the steps that Alice needs to do to prove she’s qualified to work at ACME.
 
 Alice needs your help. Are you up for it? Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/HelpAliceGetAJob.md) to run the lab.
+
+### Lab: Python not for you? THIS DOES NOT WORK BUT HAS GREAT GUI SO WE SHOULD TRY TO MAKE IT WORK
+
+The last lab in this chapter provides examples of controllers written in other languages. GitHub user [amanji](https://github.com/amanji) (Akiff Manji) has taken the agents that are deployed in the command line version of the demo and written a graphical user interface (GUI) controller for each participant using a different language/tech stack. Specifically:
+
+Alice’s controller is written in Angular.
+Faber’s controller is written in C#/.NET.
+ACME’s controller is written in NodeJS/Express.
+To run the lab, go to the instructions [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/AriesACAPyControllers.md).
+
+As an aside, Akiff decided to make these controllers based on an [issue posted in the ACA-Py repo](https://github.com/hyperledger/aries-cloudagent-python/issues/93). The issue was labelled "Help Wanted" and "Good First Issue." If you are looking to contribute to some of the Aries projects, look in the repos for those labels on open issues. Contributions are always welcome!
+
+## Building your own controller
+
+Want to go further? This is optional, but we recommend doing this as an exercise to solidify your knowledge. Build your own "Alice" controller in the language of your choice. Use the pattern found in the two other Alice controllers ([command line Python](https://github.com/hyperledger/aries-cloudagent-python/blob/master/demo/runners/alice.py) and [Angular](https://github.com/petridishdev/aries-acapy-controllers/tree/master/AliceFaberAcmeDemo/controllers/alice-controller)) and write your own. You might start by generating a skeleton using the OpenAPI/Swagger tools, or just by building the app from scratch. No link to a lab or an answer for this one. It’s all up to you!
+
+If you build something cool, let us know by [clicking here and submitting an issue](https://github.com/cloudcompass/ToIPLabs/issues). If you want, we might be able to help you package up your work and create a pull request (PR) to the [aries-acapy-controllers](https://github.com/hyperledger/aries-acapy-controllers) repo.
+
+## Controllers for other frameworks
+
+In this chapter we have focused on understanding controllers for aries-cloudagent-python (ACA-Py). The Aries project has several frameworks other than ACA-Py. In this section, we’ll briefly cover how controllers work with those frameworks.
+
+### aries-framework-dotnet
+
+The oldest of the other Aries frameworks supporting AIP 1.0 is aries-framework-dotnet, written in Microsoft’s open source C# language on the .NET development platform. The architecture for the controller and framework with aries-framework-dotnet is a little different from ACA-Py. Instead of embedding the framework in a web server, the framework is built into a library, and the library is embedded in an application that you create. That application is equivalent to an ACA-Py controller. As such, the equivalent to the HTTP API in ACA-Py is the API between the application and the embedded framework. This architecture is illustrated below.
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/23995c77a7ce8f2e36ea17d0a8a90ebe/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-02.png' width = 400>
+
+As we’ll see in the chapter on mobile agents, aries-framework-dotnet can be embedded in Xamarin and used as the basis of a mobile agent. It can also be used as a full enterprise agent, or as a more limited cloud routing agent. A jack-of-all-trades option!
+
+### Trinsic studio
+
+The easiest way to get started with aries-framework-dotnet is with the Trinsic Studio platform from [trinsic.id](https://trinsic.id/), the primary maintainers of the aries-framework-dotnet repository. Although you can build and host your own aries-framework-dotnet agent, the Trinsic Studio let’s you launch and run agents on their platform. That relieves you from having to deploy your application—Trinisic takes care of running your agent for you. Further, the platform provides several pre-built types of agents, such as an issuer and a verifier that you can deploy with just some basic configurations. No coding needed!
+
+The Trinsic platform currently gives you a great tradeoff between being able to get started quickly and easily with verifiable credentials, and having full control over your Aries agent.
+
+In this optional lab, we’ll use the Trinsic Studio to create a verifiable credential verifier agent. Once we have it running, we’ll collect a verifiable credential from a deployed ACA-Py issuer, store it in our wallet app and then verify a presentation from the credential with our new verifier.
+
+To run the lab, go to the instructions [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/TrinisicStudio.md).
+
+### aries-framework-go
+
+The aries-framework-go takes the same approach to the controller/framework architecture as ACA-Py—an HTTP interface between the two. In fact, as the team building the framework has created the implementation, they have tried to use the same Admin interface calls as ACA-Py. As such, a controller written for ACA-Py should work with an instance of aries-framework-go.
+
+What’s unique about this framework is that it is written entirely in Golang without any non-Golang dependencies. That means that the framework can take advantage of the rich Golang ecosystem and distribution mechanisms. That also means the framework does not embed the indy-sdk (libindy) and as such does not support connections to Indy ledgers or the Indy verifiable credentials exchange model. Instead, the team is building support for other ledgers and other verifiable credential models.
+
+In this optional lab, we’ll run the aries-framework-go repository’s "Getting Started" exercise to learn a bit about aries-framework-go. To run the lab, go to the instructions [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/AFGoGettingStarted.md).
 
 ## Knowledge check 4
 
@@ -1066,5 +1113,34 @@ Alice needs your help. Are you up for it? Click [here](https://github.com/cloudc
   3. To allow ACA-Py to automatically handle some protocols without a controller
   4. **To prevent a full agent from inadvertently writing to a ledger that charges per write**
   5. To specify the genesis file
+  - B and D. Increasing security and saving money are important.
 3. What does the aries-cloudagent-python (ACA-Py) framework do that the aries-framework-dotnet does not?
-4. The controllers built using the Aries frameworks with a programming language must use that language.
+ 1. **Exposes an HTTP interface to the controller**
+ 2. Builds the framework into a library
+ 3. Embeds a library into a controller application
+ - A. The architecture for the controller and framework with aries-framework-dotnet is a little different from ACA-Py. Instead of embedding the framework in a web server, the framework is built into a library, and the library is embedded in an application that you create. That application is the controller, therefore, the equivalent to the HTTP API in ACA-Py is the API between the application and the embedded framework.
+4. The controllers built using the Aries frameworks with a programming language must use that language. True or **False**?
+  - False. The language in the name of a framework indicates what is used in building the framework. A controller using a framework can be in pretty much any language.
+
+## Chapter 4 summary
+
+We’ve covered an awful lot in this chapter! As we said at the beginning of the chapter, this is the core of the course, the hands-on part that will really get you understanding Aries development and how you can use it in your use cases. The rest of the course will be lighter on labs, but we’ll refer back to the labs from this chapter to put those capabilities into a context with which you have experience.
+
+# Chapter 5
+
+## Introduction
+
+In the last chapter we focused on how a controller injects business logic to control the agent and make it carry out its intended use cases. In this chapter we’ll focus on what the controller is really controlling—the messages being exchanged by agents. We’ll look at the format of the messages and the range of messages that have been defined in the Aries protocols. Later in the course, when we’re talking about mobile agents, we’ll look deeper into how messages get from one agent to another.
+
+Some of the topics in this chapter come under the heading of "DIDComm Protocol," where pairs (and perhaps in the future, groups) of agents connect and securely exchange messages using DIDs each has created and shared, usually privately. The initial draft and implementations of the DIDComm V1 protocol described here was incubated first in the Hyperledger Indy Agent Working Group, and later the Hyperledger Aries Working Group. Work on a DIDComm Messaging V2 specification is currently happening in the [DIDComm Working Group](https://identity.foundation/working-groups/did-comm.html) within the [Decentralized Identity Foundation (DIF)](https://identity.foundation/).
+
+**NOTE**: *The work on DIDComm V2 was transferred to DIF (another Linux Foundation project) because Hyperledger is an open source code creating organization, not a standards creating body. Since part of DIF’s charter is to define standards, DIF was deemed a more suitable steward for this work. Of course, open source implementations of the standards remain an important part of the Hyperledger Aries project.*
+
+As we’ve just explained, this chapter is all about messaging and the protocols that allow messaging to happen. We will discuss:
+
+* The aries-rfcs repository—the home of all the documents!
+* "DIDComm 101," covering the two layers of Aries messaging protocols.
+* Which protocol layer a developer needs to worry about (hint: it’s the Aries protocols layer).
+* The format of protocol messages.
+* Message processing in general.
+* More about the differences between AIP 1.0 and AIP 2.0.
