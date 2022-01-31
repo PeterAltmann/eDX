@@ -1238,6 +1238,103 @@ For example, let’s look at the ["request" message in the RFC 0160 Connection p
 
 So, while it is important to know what’s going on with the protocols your controller needs to use, the technical details about what information the controller needs to supply to the framework is in the API it provides to controllers.
 
+## Framework messaging protocol
+
+Messages are sent between agents. Let’s talk about the processing of messages from the perspective of the controller. We’ll start with a controller initiating a message, and then move onto the receipt of a response to the message.
+
+You should have noticed in looking at the ACA-Py startup parameters and in the labs in the last chapter that ACA-Py can handle a number of common interactions without involving a controller. For example, when ACA-Py is started with the `--auto-accept-invites` parameter, ACA-Py will not wait on the controller to tell it what to do when it receives an invitation—it will just accept it.
+
+The `--auto*` parameters are to simplify getting started and debugging ACA-Py itself. It is rare that those parameters would be used in a production agent implementation. **Don’t rely on those parameters in your application!** In this section we’ll make sure those options are off.
+
+## Initiating a protocol
+
+We’ll start with a protocol initiated by the controller. Assume that Faber College and Alice have established a DIDComm connection and now Faber College wants to offer Alice a verifiable credential about her accomplishments at Faber. The Faber controller uses the administration API to initiate the process by requesting the agent framework send a message identifying the:
+
+* type of message to be sent
+* content of the message
+* connection to which the message is to be sent
+
+In ACA-Py (and likely other Aries frameworks) the type of message to be sent is implied by the API endpoint used by the controller. In general, there is one API endpoint per message type. The content is provided as JSON data as defined by the API endpoint. Sometimes, the JSON provided by the controller corresponds to the content items of the message that is to be sent—the JSON message fields except `@id` and `@type`. If the controller request is to start a new protocol, it might need to pass in the ID of an existing connection to use. Or, if the controller is sending a request that tells ACA-Py what to do next in an in-flight protocol, it might pass in the ID of the protocol state object.
+
+**NOTE**: *In order to know the connection on which to initiate a protocol, the controller must keep a record of the connections as they are established, perhaps storing the relationship as an attribute of an account it holds. For example, Faber College might keep the correspondence between Alice’s record and the IDs of the DIDComm connections it has established with students in its "Student Information System."*
+
+Armed with that information, agent framework code carries out the details of:
+
+* Finding the connection for Alice.
+* Determining how to route messages to Alice’s agent.
+* Generating an `@id` for the message.
+* Packaging (including encrypting) the message.
+* Sending the credential offer message.
+
+If the message requires any special processing, such as getting information from a public ledger, or using a cryptographic primitive to encrypt the message, the agent framework code handles that as well. Since usually a first message is not going to be the only message of the protocol (for example, Alice’s agent is expected to reply to the message), the agent framework also persists a protocol state object in anticipation of the response to come. We’ll talk more about that in the next section.
+
+## Receiving a Response
+
+After the message is sent, the agent handles other work it needs to do. For an enterprise agent such as Faber’s, that might be hundreds or hundreds of thousands of messages being exchanged with the agents of other users. The message from Alice might take a long time to come back. For example, the message might go to Alice’s mobile agent while her phone is not connected to the Internet because she is climbing a mountain in the Andes. Alice won’t receive the message until her phone is back online, and even then, she won’t respond until she’s had a long sleep to recover from her amazing mountain adventure. Plus she needs to catch up on Instagram...
+
+Eventually, a response from Alice’s agent is received—a credential request message because Alice wants to be issued a credential about her degree from Faber College. The agent framework code processes the message (with help from the controller) as follows:
+
+* It uses the `~thread` information to find the message’s corresponding protocol state object and retrieves it from storage. In our example, the state object from the initial credential offer message.
+  - If it doesn’t find the protocol state, there is an error in the message metadata, or if the message is found to be out of order, it will likely send an event to the controller to determine if it should send a problem report message back to Alice’s agent.
+* It processes any other generic decorators, ones not intended to be processed by the message type handler, such as tracing.
+* It hands the message and the protocol state object to the appropriate message type handler. In this case, the credential request handler that is part of the issue credential protocol is invoked.
+* The message type handler processes the message, updates the protocol state object appropriately and (if needed) sends an HTTP request to the controller (a webhook) to provide info to the protocol state object.
+* The controller receives the information via the event webhook.
+* Since the agent framework code doesn’t know how long it will take for the controller to respond to the event, it again persists the protocol state object and carries on with its other duties. Back to waiting for stuff to do...
+  - Even some enterprise controllers might take a long time to respond. For example, perhaps the Faber College Student Information System is not connected to their Accounting System. Before they issue a credential, they have to email Accounting to see if Alice is fully paid up to the college and wait on a response. That could take hours…
+* The controller uses the information from the protocol state to figure out how it wants to respond to the message. In this case, it checks Alice’s data in the Student Information System and decides if it’s going to issue the credential and the claims that are to go in the credential.
+* The controller issues another call to the Aries administration API with information on how to respond to the previous message. It passes all the same types of information as with the first message (above), with the content including the claims to be put into Alice’s verifiable credential. It also passes a reference to the protocol state object.
+* The agent framework code receives the request, retrieves the protocol state object, prepares and sends the message to Alice and updates and saves the protocol state object.
+
+You’re right—there’s a lot going on there! The good news is <mark>the sequence described above is the same for almost every request/response transaction, and it is much like the processing of traditional web servers—one layer handles the mechanics of receiving requests and responding, and another layer figures out what the request is for and how to respond</mark>. If you have done any web development, you’ve seen this pattern before.
+
+## Aries Interop Profile (AIP) Versions
+
+In Chapter 2, we talked about a key driver in the Hyperledger Aries community—the Aries Interop Profile (AIP) ([RFC 0302](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0302-aries-interop-profile)), and introduced the two AIP versions that have been defined to date, [AIP 1.0](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0302-aries-interop-profile#aries-interop-profile-version-10) and [AIP 2.0](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0302-aries-interop-profile#aries-interop-profile-version-20). Let’s talk about how AIP versions impact you, an Aries developer.
+
+* AIP versions reduce the number of protocols that you need to learn. AIP 1.0 includes just 19 RFCs and only six are Aries messaging protocols. AIP 2.0 increases the total RFC count to 34, but still includes just 10 protocol RFCs. In both versions, many of the non-protocol RFCs are addressed within the Aries framework and are not the concern of those building controllers. The bottom line? Despite the many RFCs in the aries-rfcs repo, the subset of "getting started" RFCs is really quite small.
+* As you select and configure an agent framework to use, <mark>you must be aware of the framework’s AIP support and plans for supporting any upcoming AIP versions</mark>. As this course is being updated (mid-2021) that means knowing about support for both AIP 1.0 and AIP 2.0.
+* Another factor to consider in selecting and configuring your agent is what AIP versions are supported by other agents in the ecosystem in which you are participating. Building a "latest and greatest" issuer agent when there are no mobile wallets that support the "latest and greatest" is going to be frustrating.
+  - Of course, being stuck in "old tech" is also a problem. Encouraging and helping everyone move steadily forward is in all of our best interests.
+* Finally, while most of the hard work in supporting an AIP version is in the agent framework, controllers will be impacted in the form of changes and additions to the administrative API. Pay attention to the API endpoints you are using!
+
+As a controller developer you should be aware of when AIP version changes are coming and their potential impact on your controllers. That means that you need to be plugged into the [Aries Working Group](https://wiki.hyperledger.org/display/ARIES/Aries+Working+Group), as that is the group that defines when new versions of AIPs will be introduced. You also have to be aware of what’s happening with the Aries framework you are using. Chances are, there are community meetings and regular updates for that.
+
+## Executing AIP 2.0 Protcols with JSON-LD
+
+Remember when we said there is only one lab in this chapter? Well, technically, we were telling the truth... This lab is going to be (almost) identical to the one you just finished, but this time we’re going to use AIP 2.0 protocols. We’ll still be doing the connection, but using the Out of Band and DID Exchange protocols. We’ll still be issuing a verifiable credential, but we’ll be using the Issue Credential V2.0 protocol. Also, when we issue those credentials, we’ll be using W3C Standard JSON-LD verifiable credentials using the BBS+ signatures. So, the same lab, but completely different!
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/OpenAPIControllerAIP2.md) to jump into the lab.
+
+All done? We think that’s a pretty important lab for a couple of reasons.
+
+## Reflections from the labs New protocols and VC formats
+
+Here are some things to reflect upon now that you’ve done the lab. Twice.
+
+The lab shows that the controller’s job is pretty much the same, regardless of whether you’re using AIP 1.0 or AIP 2.0. Sure, there are some API differences that have to be accounted for, but the core logic is pretty much the same for the controller--get an event, decide what to do about it, do it, and go back to waiting. And the events that are processed for AIP 1.0 and 2.0 are pretty much the same, even though they are using different protocols.
+
+The lab also shows some of the differences between the handling of Indy AnonCreds and W3C Standard JSON-LD verifiable credentials. AnonCreds are simple (just a list of claims), so managing them is pretty easy and they have some key powerful privacy-enhancing features. However, because their format is so simple, there is a lot of implied understanding between those issuing the credentials and those verifying them. The only technical information about how to use the claims in the credentials is the name of the claims. Conversely, JSON-LD credentials require the creation/use of a lot more semantic information around them. The verifier can know from the `@context` links precise information about the claims, their format, perhaps even localization information (how to present them in different languages). On the other hand, that detail makes them harder to construct and manage, and they lack some of the privacy features of AnonCreds. It’s an interesting tradeoff!
+
+## Summary
+
+We have covered a lot of information about the Aries protocols including the details of the protocols you will use as you code them into your controller. As you build your own application and need to know more about the underlying details of the protocols, you know where to look, right? Yup, the aries-rfcs repo!
+
+Let’s highlight the key takeaways from this chapter:
+
+* You need to know about the aries-rfcs repos but you don’t need to do a deep dive (or even a shallow one) there until you have something specific to look up (for example, handling a particular protocol).
+
+**NOTE**: *Want to gain some points in the Aries community? If you find something in an RFC that needs clarification, submit an issue or a pull request to make things better. Such contributions are always welcome.*
+
+* With Aries, there are two levels of messaging protocols. Since all of the messaging is based on the exchange and use of DIDs, the overall messaging mechanism is called **DIDComm** (for DID communication).
+  - The DIDComm protocol handles the delivery of messages.
+  - The Aries protocols define the content of the messages delivered.
+* As an Aries application developer your focus is on the Aries protocols, the protocols that define back-and-forth sequences of specific messages to accomplish some shared goal. You don’t need to know much about how the messages get delivered, just about the content of each message.
+* As an Aries application developer, you also have to pay attention more to the APIs provided by the Aries framework you are using than to the nitty-gritty details of the protocols. You need to understand the protocols, but to use them, it’s all in the API!
+* As a developer, you need to be aware of the Aries Interop Profile (AIP) to keep track of the versions of the Aries protocols that other developers and organizations are using so that your applications will be able to interoperate with theirs.
+
+Easy, peasy, right?! You’re well on your way to becoming a Hyperledger Aries developer!
+
 ## Knowledge Check 5
 
 1. When it comes to developing an Aries controller, developers should focus more on the DIDComm protocol layer. True or <mark>False</mark>?
