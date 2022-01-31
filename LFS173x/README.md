@@ -98,7 +98,7 @@ As we’ll see, verifiable credentials and presentations are not simple document
 
 Unlike a paper credential, those four attributes are evaluated not based on the judgment and expertise of the person looking at the credential, but rather online using cryptographic algorithms that are extremely difficult to forge. When a verifier receives a presentation from a holder, they use information from a decentralized source, often a distributed ledger (shown as the **verifiable data registry** in the image below) to perform the cryptographic calculations necessary to prove the four attributes. Forgeries become much (MUCH!) harder with verifiable credentials!
 
-<img src="https://courses.edx.org/assets/courseware/v1/e6878fa7000fb538a7e8b9dec066d0b1/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS172x_CourseGraphics_V1-04.png" alt="drawing" width="500"/>
+<img src="https://courses.edx.org/assets/courseware/v1/e6878fa7000fb538a7e8b9dec066d0b1/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS172x_CourseGraphics_V1-04.png" alt="VC data model" width="500"/>
 <br>
 <br>
 The prerequisite course, "Introduction to Hyperledger Sovereign Identity Blockchain Solutions: Indy, Aries and Ursa" (LFS172x), more than covers the reasons why we need a better identity model on the Internet so we won’t go into it too much here. Suffice to say, the availability of distributed ledgers (such as those based on Hyperledger Indy) has enabled a better way to build solutions using authentic data, and in doing so, enables the creation of a more trusted Internet.
@@ -1144,3 +1144,125 @@ As we’ve just explained, this chapter is all about messaging and the protocols
 * The format of protocol messages.
 * Message processing in general.
 * More about the differences between AIP 1.0 and AIP 2.0.
+
+## The aries-rfc repository
+
+The concepts and features that make up the Aries project are documented in the Hyperledger [aries-rfcs](https://github.com/hyperledger/aries-rfcs) GitHub repository. RFC stands for "request for comments" and is a type of text document used by a wide range of technical groups to create understanding towards defining and evolving communication standards. RFCs are the documents that tell developers how they MAY, SHOULD and MUST do things to meet a particular standard. With Aries, the RFCs are defined into two groups, concepts (background information that crosses all protocols) and features (specifications of specific protocols).
+
+The aries-rfcs repository is full of extremely detailed information about exactly how each protocol is to be implemented. While the repo is a crucial resource for developers, it is overwhelming for newcomers. It’s definitely not the best place to get started—kind of like learning a new language by reading the dictionary. It’s important that you are aware of the aries-rfcs repo so that when you are deep in the weeds and need to know exactly what a certain protocol does, you know where to look. For now though, follow along here and we’ll get you going!
+
+Through the remainder of the course, we’ll provide pointers into the aries-rfcs repo for things we mention. That way, when you are on your own, you’ll know how to navigate the repo when you need to know the crucial details it holds. Here’s a first example: the [index](https://github.com/hyperledger/aries-rfcs/blob/main/index.md) markdown file in the root of the repo provides a generated list of all of the RFCs in the repo ordered by their current maturity status, proposed, demonstrated, accepted, etc. Check it out!
+
+**NOTE**: *Hyperledger Indy has a comparable repository to aries-rfcs called indy-hipe (for Hyperledger Indy Project Enhancement). Despite the name difference, the purpose of the repository is the same. Likewise, the DIDComm Messaging protocols that moved from Hyperledger Aries to the Decentralized Identity Foundation (DIF) have a comparable home there—although the format of the documents is a bit different. Regardless of where the specification document resides, if it is relevant to Aries protocols and interoperability, it will be covered in aries-rfcs.*
+
+## Basic Concepts of DIDComm Messaging
+
+The core capability of an Aries agent is peer-to-peer messaging—connecting with other agents and sending and receiving messages to and from those agents to accomplish some interaction. The interaction might be as simple as sending a text message, or more complex, such as negotiating the issuing of a verifiable credential or the presentation of a proof.
+
+Enabling both the exchange and use of messaging to accomplish higher level transactions requires participants interact in pre-defined ways, to interact by following mutually agreed upon protocols. Aries protocols are just like human protocols, a sequence of events that are known by the participants to accomplish some shared outcome. For example, going out to a restaurant for a meal is a protocol, with both the guests and the restaurant staff knowing the sequence of steps for their roles—greeting, being seated, looking at menus, ordering food, etc. Unlike human protocols (etiquette), Aries protocols need to be carefully specified and then implemented by multiple participants.
+
+With Aries, there are two levels of messaging protocols.
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/2ad59841be10d060c156f5592556e834/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-28.png' alt = 'DIDComm' width = '400'>
+<br>
+<br>
+
+At the lower level is the **DIDComm protocol** (version 1.0), the method by which messages are exchanged, irrespective of the message content. The participants exchange DIDs, and the attributes of the DIDs—signing and encryption keys, and service endpoint details—enable end-to-end secure messaging. You can think of the DIDComm protocol as being like the postal service. You write a letter, place it into an envelope, address it to a recipient, give it to the postal service and magically, it appears at the recipient’s door. And, just like the postal service, there is a lot of complexity in the sending and receiving of a message. As an aside, it’s [Version 2](https://identity.foundation/didcomm-messaging/spec/) of this protocol that was moved from Hyperledger to the [DIDComm Working Group](https://identity.foundation/working-groups/did-comm.html) at the [Decentralized Identity Foundation](https://identity.foundation/).
+
+At a higher level are the **Aries protocols** we talked about in the last chapter, the many protocols that define back-and-forth sequences of specific messages to accomplish some shared goal. The simplest of these is one agent sending another agent a text message ("Hi, how are you?"). A much more complex protocol is issuing a verifiable credential, where it takes three messages back and forth to offer, request and issue a credential. The set of messages, the roles of the participants, the state of the protocol and some extra details (such as acknowledgments and error handling), define each of the many Aries protocols.
+
+With the DIDComm protocol we don’t care about the content of the message, just the method by which the message gets delivered. With the Aries protocols, it’s the reverse—we know that the messages get delivered (we don’t care how), and we only care about what to do with the content of each message.
+
+## Aries protcols that matter for devs
+
+As we’ve discussed, there are two levels of protocols at play with DIDComm messaging: the DIDComm protocol (aka "envelope") and the Aries protocols (aka "content"). While it’s important to understand that both layers of protocols exist, for the most part, <mark>Aries application developers (those building Aries controllers) are really not exposed to the lower DIDComm (envelope) layer at all</mark> The DIDComm (envelope) layer is handled pretty much entirely in code provided by the Aries frameworks.
+
+On the other hand, Aries application developers do need to understand a lot about the Aries protocols (content). While the mechanics of receiving Aries protocol messages and preparing and sending messages is handled by the code in the Aries frameworks, the semantics (business processing) of what to do with those messages is up to the controller. For example, when an enterprise agent wants to issue a credential to another agent, the controller doesn’t have to get into the nitty-gritty of preparing a verifiable credential. However, the controller does have to pass in (via the controller-to-framework API) the claims data that will be put into the credential.
+
+As such, for the remainder of this chapter, we will focus only on the upper-level, Aries protocols (content). We will cover a bit about the lower level DIDComm (envelope) protocol in Chapter 7 when we talk about message routing in relation to mobile agents.
+
+## The Format of Aries Protocol Messages
+
+As we saw in the labs in the previous chapter, the format of Aries protocol messages is JSON. Let’s start our look into Aries protocols by considering an example of a simple message and going through each of the JSON items. The following is the only message in the “basic message” protocol defined in Aries [RFC 0095](https://github.com/hyperledger/aries-rfcs/tree/master/features/0095-basic-message).
+
+```JSON
+{
+    "@id": "caec7c09-e0ef-4e2a-9708-e69316a0b73f",
+    "@type": "https://didcomm.org/basicmessage/1.0/message",
+    "~l10n": { "locale": "en" },
+    "sent_time": "2019-01-15 18:42:01Z",
+    "content": "Your hovercraft is full of eels."
+}
+```
+
+The purpose of the message is simple: to send some content in a message from one agent to another.
+
+While the format is standard JSON, some conventions are used in messages such that they are compatible with [JSON-LD](https://json-ld.org/) (JSON Linked Data)—notably the `@type` and `@id` items that are in every Aries protocol message. For those unfamiliar, JSON-LD is based on JSON and enables semantic information (what the JSON data items mean) to be associated with JSON. It is a W3C-standard way to embed in the JSON itself a link to metadata about the items in the JSON structure so that an application developer can know exactly how the data is to be processed. "Compatible with JSON-LD" means that while the JSON does not support all the features of JSON-LD, it respects JSON-LD requirements such that JSON-LD tools can process the messages. It’s not crucial to know more about Aries messaging and JSON-LD at this point, but if you are curious, you can read Aries [RFC 0047](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0047-json-ld-compatibility) about support for JSON-LD in Aries messages.
+
+Back to the message content. <mark>Every message in every protocol includes the first two fields `@id` and `@type`.</mark>
+
+* `@id` is a unique identifier for the message, generated from a globally unique ID (GUID) library.
+* `@type` is the type of the message. It is made up of the following parts:
+  - Namespace (e.g., https://didcomm.org). See details below.
+  - Protocol (e.g., basicmessage). The name of protocol to which the message type belongs.
+  - Message version (e.g., 1.0). Aries uses the [semver](https://semver.org/) versioning system, as defined here, although with just major.minor version components.
+  - Message type (e.g., message). The actual text of the message.
+
+Namespace is defined so that when appropriate, different groups (for example, companies, standards groups, etc.) can independently define protocols without conflicting with one another. All of the protocols defined by the Aries Working Group (and hence, documented in the aries-rfcs repo) use the same namespace, the one listed above (https://didcomm.org). By using a URL as the namespace, the Aries community hopes to one day make the message type a link to the human (and perhaps machine readable) specification for the message.
+
+**NOTE**: *When AIP 1.0 was defined, the “Namespace” prefix was a specific DID (specifically this DID:* `did:sov:BzCbsNYhMrjHiqZDTUASHg;spec`). *The Aries community decided that since that DID was on a specific Indy network, it was inappropriate to use for a "blockchain-agnostic" project, and the transition was made to the new didcomm.org namespace. Even now (mid-2021) you may find some production Aries agent still using the old-style DID message type namespace. Message types in all AIP 2.0 RFCs require using the didcomm.org-style namespace.*
+
+The remaining items in the JSON example above are specific to the type of the message. In our example, these are the items `~l10n`, which we’ll talk about in the next section, `sent_time` (when the message was sent, as defined by the sender) and `content` (the text of the message). For each message type in each protocol, the protocol specification defines all of the relevant information about the message type specific item. This includes which items are required and which are optional, the data format (such as the time format in the `sent_time` field above), and any other details necessary for a developer to implement the message type. That overview of message types should be all you need to know. However, it’s a good idea to get used to going to the aries-rfcs repository to get all the details on a topic, so please check out [RFC 0020](https://github.com/hyperledger/aries-rfcs/blob/main/concepts/0020-message-types/README.md) to see the accepted information about message types.
+
+## Message decorators
+
+In addition to protocol specific data elements in messages, messages can include "decorators," standardized message elements that define cross-cutting behavior. "Cross-cutting" means the behavior is the same when used in different protocols. Decorator items in messages are indicated by a "`~`" prefix. The `~l10n` item in the previous section is an example of a decorator. It is used to provide information to enable the localization of the message—translations to other languages. Decorators all have their own RFCs. In this case, the localization decorator is specified in [RFC 0043](https://github.com/hyperledger/aries-rfcs/blob/master/features/0043-l10n/README.md).
+
+The most commonly used decorator is the `~thread` ([RFC 0008](https://github.com/hyperledger/aries-rfcs/tree/master/concepts/0008-message-id-and-threading)) decorator, which is used to link the messages in a protocol instance. As messages go back and forth between agents to complete an instance of a protocol (for example, issuing a credential), `~thread` decorator data lets the agents know to which protocol instance the message belongs, and the ordering of the message in the overall flow. It’s the `~thread` decorator that will let Faber College issue thousands of credentials in parallel without losing track of which student is supposed to get which verifiable credential. We’ll talk later in this chapter about the `~thread` decorator when we go over the processing of a message by an agent. You’ll note that the example message in the previous section doesn’t have a `~thread` decorator. That’s because it is the first message of that protocol instance. When a recipient agent responds to a message, it takes the `@id` of the first message in the protocol instance and makes it the `@thid` (thread-id) of the `~thread` decorator. Want to know more? As always, the place to look is in the aries-rfcs. Other currently defined examples of decorators include `~attachments` ([RFC 0017](https://github.com/hyperledger/aries-rfcs/tree/master/concepts/0017-attachments)), `~tracing` ([RFC 0034](https://github.com/hyperledger/aries-rfcs/tree/master/features/0034-message-tracing)) and `~timing` ([RFC 0032](https://github.com/hyperledger/aries-rfcs/blob/master/features/0032-message-timing/README.md)).
+
+Decorators are often processed by the core of the agent, but some are processed by the protocol message handlers. For example, the `~thread` decorator is processed by the core of the agent to connect an incoming message with the state of a protocol that is mid-flight. On the other hand, the `~l10n` decorator (enabling text display in multiple languages) is more likely to be handled by a specific message type, as its purpose can’t be understood except by the message handler.
+
+## Special Message Types: Ack and Problem Report
+
+The Aries Working Group has defined two message types that deserve special attention: `ack` (acknowledge) and `problem_report`. Much like decorators, these are cross-cutting messages, used in the same way across many protocols. In particular, these messages are for error handling.
+
+In executing an instance of a protocol, there are often times when one agent wants to say to the other "yup, I got your last message and all is well." Likewise, if something goes wrong in a protocol, an agent will want to notify the other "uh-oh, something bad has happened!" Rather than having each protocol define their own special purpose messages, the common `ack` and `problem_report` messages were defined so that any protocol can *adopt* those messages. When a protocol adopts these messages it means that there is a message type of `ack` (and/or `problem_report`) in the protocol, even though there is not a formal definition of the message type in the specification. The definition is found in the respective RFCs: [RFC 0015](https://github.com/hyperledger/aries-rfcs/tree/main/features/0015-acks) for ack, and [RFC 0035](https://github.com/hyperledger/aries-rfcs/tree/main/features/0035-report-problem) for problem report.
+
+Remember that unlike HTTP requests, all DIDComm messages are asynchronous. An agent sends off the message, doesn’t immediately get a response, and continues doing other things until it receives the next message of the protocol. Thus, a common use case for `problem_report` is when an agent sends off a message and doesn’t hear back in a time it thinks is reasonable, it can send a problem report message asking if the previous message was received.
+
+## Protocols and Messages: The Controller’s Perspective
+
+Since protocols enable the interactions between Aries agents, it’s important for you, the Aries developer, to know what the protocols do and how to use them when coding your controller. However, as we’ll see soon, the controller does not handle all the nitty-gritty details of the protocol messages directly. Rather, each Aries framework exposes a way to use the protocols that minimizes what the controller has to do, thus limiting the mistakes the controller can make. In ACA-Py, the endpoints made available via the Admin HTTP API requires the controller to provide the absolute minimum information necessary for ACA-Py to carry out an action.
+
+For example, let’s look at the ["request" message in the RFC 0160 Connection protocol](https://github.com/hyperledger/aries-rfcs/tree/main/features/0160-connection-protocol#1-connection-request). The message has a number of explicitly defined fields, plus some implicit ones such as the `~thread` decorator. Fortunately, the controller doesn’t have to construct the actual message. All the controller does is call the `/connections/request` Admin API endpoint, pass in a single parameter (the ID of the connection, which it got from an earlier webhook event), and ACA-Py takes care of the rest!
+
+So, while it is important to know what’s going on with the protocols your controller needs to use, the technical details about what information the controller needs to supply to the framework is in the API it provides to controllers.
+
+## Knowledge Check 5
+
+1. When it comes to developing an Aries controller, developers should focus more on the DIDComm protocol layer. True or <mark>False</mark>?
+2. What two fields are included in every message in every Aries protocol?
+  * `@type` and `namespace`
+  * `sent_time` and `content`
+  * <mark>`@id` and `@type`</mark>
+  * `@id` and `content`
+3. As a developer, you should be aware of an agent framework’s support for the current AIP version. <mark>True</mark> or False?
+4. What are the two message types defined by the Aries Working Group that deserve special attention:
+  * `rinse` and `repeat`
+  * `auto_response` and `error_handler`
+  * `thread` and `id`
+  * <mark>`ack` and `problem_report`</mark>
+5. In the basic message example below, what does the element `~110n` line tell us:
+```JSON
+{
+    "@id": "123456780",
+    "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/basicmessage/1.0/message",
+    "~l10n": { "locale": "en" },
+    "sent_time": "2019-01-15 18:42:01Z",
+    "content": "Your hovercraft is full of eels."
+}
+```
+  * The type of the message
+  * <mark>A kind of cross-cutting behaviour to apply to the message</mark>
+  * Where the message is to be sent
+  * The content of the message
