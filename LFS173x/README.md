@@ -1288,6 +1288,12 @@ Eventually, a response from Alice’s agent is received—a credential request m
 
 You’re right—there’s a lot going on there! The good news is <mark>the sequence described above is the same for almost every request/response transaction, and it is much like the processing of traditional web servers—one layer handles the mechanics of receiving requests and responding, and another layer figures out what the request is for and how to respond</mark>. If you have done any web development, you’ve seen this pattern before.
 
+## Lab: Executing a protocol
+
+We only have one lab in this chapter, but it’s a doozy! We’re going to use the OpenAPI/Swagger interface for ACA-Py that was introduced in the last chapter to manually walk through a connection and credential issuance process from Faber to Alice. There’s no controller other than you and OpenAPI/Swagger to receive and respond for each of the agents
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/OpenAPIController.md) to jump into the lab.
+
 ## Aries Interop Profile (AIP) Versions
 
 In Chapter 2, we talked about a key driver in the Hyperledger Aries community—the Aries Interop Profile (AIP) ([RFC 0302](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0302-aries-interop-profile)), and introduced the two AIP versions that have been defined to date, [AIP 1.0](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0302-aries-interop-profile#aries-interop-profile-version-10) and [AIP 2.0](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0302-aries-interop-profile#aries-interop-profile-version-20). Let’s talk about how AIP versions impact you, an Aries developer.
@@ -1300,7 +1306,7 @@ In Chapter 2, we talked about a key driver in the Hyperledger Aries community—
 
 As a controller developer you should be aware of when AIP version changes are coming and their potential impact on your controllers. That means that you need to be plugged into the [Aries Working Group](https://wiki.hyperledger.org/display/ARIES/Aries+Working+Group), as that is the group that defines when new versions of AIPs will be introduced. You also have to be aware of what’s happening with the Aries framework you are using. Chances are, there are community meetings and regular updates for that.
 
-## Executing AIP 2.0 Protcols with JSON-LD
+## Lab: Executing AIP 2.0 Protcols with JSON-LD
 
 Remember when we said there is only one lab in this chapter? Well, technically, we were telling the truth... This lab is going to be (almost) identical to the one you just finished, but this time we’re going to use AIP 2.0 protocols. We’ll still be doing the connection, but using the Out of Band and DID Exchange protocols. We’ll still be issuing a verifiable credential, but we’ll be using the Issue Credential V2.0 protocol. Also, when we issue those credentials, we’ll be using W3C Standard JSON-LD verifiable credentials using the BBS+ signatures. So, the same lab, but completely different!
 
@@ -1363,3 +1369,180 @@ Easy, peasy, right?! You’re well on your way to becoming a Hyperledger Aries d
   * <mark>A kind of cross-cutting behaviour to apply to the message</mark>
   * Where the message is to be sent
   * The content of the message
+
+# Chapter 6
+
+We’ll take a break in this chapter from diving into the weeds of controllers, APIs and protocols and talk about a couple of useful development tools available in the Aries community. This is a short chapter but it might spark some ideas about how to extend these tools, or what other tools might be helpful.
+
+In this chapter, we will describe the current suite and state of the various Aries development tools. You will learn about:
+
+* The Aries Agent Test Harness
+* The Aries Toolbox
+
+We also have some labs that let you take these tools for a test drive.
+
+## Interoperability testing
+
+We’ve talked several times about the Aries Interop Profiles (AIPs) and briefly mentioned that there is a need for a way for Aries agents to demonstrate interoperability and AIP-compliance. When AIP 1.0 first came out, agent and agent framework builders could claim (self-assert) they were compliant, but wouldn’t it be better if they could prove their support for a specific AIP version? As we know from all we’ve learned about verifiable credentials, self-asserted claims are not nearly as useful as claims issued by an authority. Further, wouldn’t it be even more useful to know that not only does an Aries component comply with AIP 1.0, but that it is demonstrably (and continuously) interoperable with other Aries components—that ACA-Py really does work with aries-framework-dotnet, aries-framework-go and so on?
+
+To prove an agent or agent framework’s support for a given AIP version, we want to be able to run an instance of the agent through a set of tests aligned with the versions of the protocols included in the AIP. The test suite must generate, at minimum, a report on the tests executed and on success. Better yet, test suite execution should produce a verifiable credential with claims about the conformance results!
+
+
+Aries RFC ([0270 Interop Test Suite](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0270-interop-test-suite)) outlines the requirements that should be provided by an Aries Interop Test Suite. The following list highlights some of the important features mentioned in the RFC that we want in a good test suite. Think about these features as you go through this section:
+
+* Test cases should be built around protocols and the different roles supported by the protocols. For example, test cases should cover the agent both initiating and responding to a protocol.
+* Tests should exercise both expected and unexpected inputs; agents should gracefully handle receiving bad data.
+* The test suite should have test variations to exercise different features of agents.
+* The test suite should allow the agent-under-test (AUT) configuration to define the set of tests to run.
+* An execution of the test suite should report only on the results of the tests executed.
+* The test suite should be reasonably efficient to run. This implies there is likely a need to load the state of participating agent(s) to a given starting state vs. executing actions to get to the desired starting state for every test.
+* The test suite should be automated and able to be included in a [CI/CD pipeline](https://semaphoreci.com/blog/cicd-pipeline) as part of the code promotion process.
+
+A couple of these requirements (e.g., having the agent-under-test (AUT) initiate tests and loading state) imply that <mark>the test suite has a way to control the AUT for some tests—to get it to do something versus waiting to be contacted via agent messaging. This is done using the concept of a "backchannel," an API between the test suite and the AUT.</mark> This is pictured below, in an image taken from [RFC 0270](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0270-interop-test-suite). The "frontchannel" is the normal DIDComm messaging path between agents, while the backchannel is used to tell the agent what to do in executing a test.
+
+**NOTE**: *In order to execute the tests in a test suite, an AUT may have to build some custom code to handle the backchannel commands sent by the test suite. This is part of deploying an instance of the agent to run the tests in the suite.*
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/8a3258ca5844cbd48d47b317ec79c314/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-05.png' width = 500><br>
+
+With that introduction into Aries interoperability, let’s take a look at the Aries Agent Test Harness.
+
+## Aries Agent Test Harness
+
+The vision for the Aries Agent Test Harness (AATH) comes from the physical labs that the big telecommunication companies use to test their products. In those labs (like the [UNH InterOperability Lab](https://www.iol.unh.edu/)), a telecom company brings their networking products, new and old, plugs them into the lab network and sees if they work with products from all of the other participating companies. Networking products that don’t interoperate with the rest of the network ecosystem create problems for everyone. Same with Aries components in the ToIP ecosystem!
+
+AATH works by having each "component-under-test" packaged as a test agent (TA) that looks identical (from the outside) as all other TAs. <mark>In AATH, a component-under-test is generally an Aries framework (not an agent, hence not an "agent-under-test"), although in theory it could be an agent (e.g., a framework plus a controller)</mark>. Each TA implements a backchannel (as discussed above) that provides an API that can be called by the test harness to orchestrate test steps. The backchannels are controllers that for each API request, cause the component-under-test to execute the steps. Since all the TAs look the same (at least to the test harness), AATH tests can be run using any set of TAs.
+
+Each AATH test involves four TAs (called ACME, Bob, Faber and Mallory), as shown in the picture below. The TAs are driven by a "Behavior Driven Development" ([BDD](https://www.agilealliance.org/glossary/bdd/)) engine (specifically, the [Behave](https://behave.readthedocs.io/en/latest/) engine) that orchestrates the test executions. Each test script implements some AIP capability—a set of protocols. As noted, since all of the TAs are (more or less) identical, any TA can play any role—limited of course by the capabilities of the "component-under-test." To make everything easy to run, the test agents are all packaged into Docker-type containers.
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/42e7c57386ffdfee64b630367c556c48/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics_v3.png' width = 700>
+
+The names of the participants in the test scripts imply their usual role in a verifiable credential ecosystem, although they may perform activities other than their usual role in some tests.
+
+* ACME is an issuer
+* Bob is a holder/prover
+* Faber is a verifier
+* Mallory is holder/prover that is sometime malicious
+
+When AATH tests are run, the TAs and BDD engine are deployed and a list of test scripts to execute is passed into the engine. As necessary, some supporting services are also started; perhaps a VON Network Indy instance, or an external universal resolver. Driven by the test scripts, the BDD engine makes calls (using HTTP) to the TA backchannels, triggering interactions between the components under test using the DIDComm agent-to-agent interface. Progress and results are reported from the backchannels to the BDD engine, and optionally, to a test suite execution report tool.
+
+The BDD tests themselves are quite readable and so provide a good example of the business flows involved in Aries agent interactions. For example, the following is a test script that executes the "present proof" protocol:
+
+```
+Scenario Outline: Present Proof where the prover does not propose a presentation of the proof and is acknowledged
+      Given "2" agents
+         | name | role |
+         | Faber | verifier |
+         | Bob | prover |
+      And "Faber" and "Bob" have an existing connection
+      And "Bob" has an issued credential from When "Faber" sends a request for proof presentation to "Bob"
+      And "Bob" makes the presentation of the proof
+      And "Faber" acknowledges the proof
+      Then "Bob" has the proof verified
+
+      Examples:
+         | issuer |
+         | Acme |
+         | Faber |
+```
+
+The AATH scripts are organized around a protocol that is part of a particular AIP. Tags are used on tests to both indicate the topic of the tests (e.g., what RFC, what AIP version, etc.) and to select what tests are to be executed on a given run.
+
+The AATH approach of using a backchannel to control the component-under-test should be familiar to you. The backchannel is just another Aries controller! Each test agent is just a bundling into a Docker container of a controller (the backchannel) that responds to HTTP requests from the test harness, and an Aries component-under-test (usually an Aries framework) that the controller controls.
+
+## Lab Aries Agent Test Harness
+
+In this lab we’ll look at the Aries Agent Test Harness that can be used to test the interoperability of two Aries agents.
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/AriesTestHarness.md) to run the lab.
+
+## Visualizing Aries Interoperability
+
+While the Aries Agent Test Harness is interesting to know about, how does it help an Aries developer? Why is it important?
+
+One obvious benefit is that the tests provide a good way to see how Aries agent interactions occur (by looking at the BDD test scripts) and how controllers are implemented (by looking at the backchannels). But other than that, the internals of the AATH is really focused on the developers of Aries frameworks. Helpful, but not too helpful.
+
+A second thing you might consider is creating a backchannel for your full Aries agent. We’ve not had anyone in the community do this yet, but it has been considered. It would give you a whole lot of runnable tests and a way to run them against other implementations. Interesting, but if you are building on an existing Aries framework, there shouldn’t be any surprises.
+
+However, there is one absolutely critical output of AATH that is a must-use resource for all Aries developers. The AATH repo has a series of automated test sets (via GitHub actions) that are executed daily for all of the available backchannels using (usually) the latest code merged into the "main" branch of each "component-under-test." The results of those runs are collected using a BDD test reporting tool ([Allure](https://github.com/allure-framework/allure2) — pretty neat!) and a summary report is generated that is published on the website https://aries-interop.info every few days (whenever the results change).
+
+By monitoring the https://aries-interop.info website, you can track:
+
+* Current state of interoperability across a number of Aries frameworks (most importantly, the current state of interoperability of the Aries framework that you are using).
+* You can see what specific tests are passing and failing. Are they going to impact you?
+* You can drill into the test results and see exactly where the failures are occurring. Perhaps you can contribute a fix?
+* You can see areas that are not being tested. Perhaps you could contribute some test cases to AATH!
+* You can see how new protocols and AIP versions are progressing across Aries implementations. This will tell you, for example, is AIP 2.0 ready to use in the wild?
+
+## Lab The aries interop info website
+
+In this lab, you will check out the Aries Interop Info website, learn how to navigate beyond the front page and use the Allure reports to drill into specific test cases. We’ll try to find some test failures and see exactly where and why they are failing.
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/AATHInfo.md) to run the lab.
+
+## The mobile backchannel
+
+The last thing we’ll mention about the AATH is a cool backchannel that can be used to test mobile wallet apps. The "mobile" backchannel operates the same as all of the other backchannels, except the "component-under-test" is intended to be an Aries mobile wallet. The backchannel is limited, as the only way the backchannel can "control" the mobile wallet is by printing directions for you (the person holding the phone) and displaying QR codes for connecting the mobile wallet to the other test agents being run. Once connections are made, the actions of the other agents drive the behavior of the mobile wallet. Only some of the AATH tests can be run, and the mobile agent is "Bob" in all the tests.
+
+The beauty of the "mobile" backchannel is that you can download a mobile wallet app onto your phone and immediately run it against issuers and verifiers using different Aries frameworks, no muss, no fuss! It’s also pretty cool how the QR codes are displayed on a terminal screen. Of course, they are pretty low resolution, so if the mobile wallet’s scan feature can’t handle the QR code, you are pretty well stuck.
+
+Next you will find a quick lab to give that a try.
+
+## Lab The AATH Mobile Backchannel
+
+In this lab, you will use AATH, the mobile backchannel and one of the other backchannels to test the interoperability of an Aries mobile wallet. Get out your favorite mobile wallet app and give it a try!
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/AATHMobileBackchannel.md) to run the lab.
+
+That’s it for the Aries Agent Test Harness. Next up, the Aries Toolbox!
+
+## The Aries Toolbox
+
+The Aries Toolbox is a desktop tool (written in [Electron](https://www.electronjs.org/) using [Vue](https://github.com/SimulatedGREG/electron-vue)) that allows a user to control the behavior of running Aries agents. It provides a graphical user interface tuned to Aries for developers and system administrators to control (in theory) any running Aries agent. To enable an instance of the Aries Toolbox to control running agents, additional protocol message types are added to these agents. With that additional functionality, <mark>an ACA-Py agent can be controlled by an Aries Toolbox instance using the DIDComm channel, instead of by the HTTP interface used by a typical ACA-Py controller</mark>.
+
+Conceptually, the Aries Toolbox enables controller functionality similar to what we saw with ACA-Py and its OpenAPI interface. However, unlike the generic OpenAPI interface, which is used with any HTTP interface, the Aries Toolbox has Aries-specific knowledge and capabilities, making it easier to accomplish certain agent-related functions. As such, <mark>while the OpenAPI interface we talked about in earlier chapters is strictly for developers to learn about the administrative API to ACA-Py</mark>, the Aries Toolbox can be used to connect to any running agent—even those in production—to accomplish administrative tasks.
+
+During interactions with other agents, the Aries Toolbox shows connection, protocol state and debugging information. The image below is the Aries Toolbox running with connections to ACA-Py agents for Alice and Bob.
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/6986ad72bdefb5a725799feb48449874/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/AriesToolboxScreenshot.png' width = 700>
+
+As shown in the image, an administrative interface for each agent connection is presented in its own window, along with a list of actions that the user can trigger the agent to perform. The list of actions is tuned to each connected agent by the Aries Toolbox executing the "Discover Features" protocol ([RFC 0031](https://github.com/hyperledger/aries-rfcs/tree/main/features/0031-discover-features)).
+
+Architecturally, Aries Toolbox works quite differently from the combined ACA-Py/OpenAPI administrative interface we looked at earlier in the course. Rather than using the HTTP interface that ACA-Py exposes, Aries Toolbox uses the same DIDComm agent interface supported by every Aries agent. To work with a given agent, Aries Toolbox requires that the connected agent supports special administrative message types. It’s through these added message types that the Aries Toolbox is able to control the agent. For ACA-Py, a second repo, aries-acapy-plugin-toolbox, provides an external Python module that can be included in any ACA-Py instance at runtime (using the `--plugin ACA-Py` command line parameter) to add the necessary admin message types. The following contrasts the ACA-Py Admin API with the approach used by the Aries Toolbox:
+
+| ACA-Py/OpenAPI | Aries Toolbox |
+|---|---|
+| Uses an HTTP interface to ACA-Py. | Uses the DIDComm agent interface. |
+| Use when you are learning about the HTTP interface to ACA-Py in order to write your own controller. | Can (in theory) connect to any Aries Agent—provided it supports extended protocols needed by Aries Toolbox. |
+|  | Use this for controlling an agent to establish connections and execute higher level protocols. |
+
+The use cases for the two techniques are quite different. The ACA-Py/OpenAPI mechanism is a training tool intended to be used by developers learning how to use the administrative API exposed by an ACA-Py agent in order to write a controller application. Aries Toolbox is for interactively controlling Aries agents. However, since it does not expose a programmable API, Aries Toolbox cannot be used as the basis of a controller application (although it is a great example controller).
+
+The Aries Toolbox implements a couple of interesting use cases:
+
+* Users new to Aries agents can explore the interactions between agents (connections and protocols) at a higher-than-the-controller level, to understand how they work.
+* Aries Toolbox can be used to perform one time agent actions that previously required the Indy Command Line Interface (CLI) or single purpose scripts.
+
+For example, Aries Toolbox can be used for experimenting with creating and writing a new schema and credential definition to a test ledger, and then trying out issuing credentials using those objects. We’ll look at more such tasks in Chapter 8 when we talk about getting ready for production.
+
+The special administrative message types used by the Aries Toolbox are not part of aries-rfcs and so are not supported by other agent frameworks. The ACA-Py capability to add Python external modules to an agent at runtime made it easy for Aries Toolbox developers to add the necessary messages to ACA-Py agent instances.
+
+## Lab The Aries Toolbox
+
+In this lab, we’ll spin up some Aries ACA-Py agents and the Aries Toolbox, and use the Toolbox graphical user interface to control the agents.
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/AriesToolboxLab.md) to run the lab.
+
+## Knowledge check
+
+1. What should be used by developers to learn how to use the administrative API exposed by an ACA-Py agent to write a controller application?
+  * <mark>OpenAPI/Swagger</mark>
+  * Aries Toolbox
+  * ACA-Py
+  * Aries Agent Test Harness
+2. How is the Aries Toolbox different than the ACA-Py OpenAPI administrative interface?
+  * <mark>It uses the DIDComm agent interface to control agents</mark>
+  * It uses the HTTP interface to control agents
+  * It uses the OpenAPI/Swagger interface to control agents
+  * It uses an administrative interface to control agents
+3. The backchannel in the Aries Agent Test Harness is used to tell the test agent what to do in executing a test. <mark>True</mark> or False?
+4. Both the APTS and AATH implement agents that test the conformance of an agent to a given standard, such as the Aries Interop Profile (AIP). True or <mark>False</mark>?
