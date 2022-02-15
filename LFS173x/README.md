@@ -1546,3 +1546,549 @@ Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2
   * It uses an administrative interface to control agents
 3. The backchannel in the Aries Agent Test Harness is used to tell the test agent what to do in executing a test. <mark>True</mark> or False?
 4. Both the APTS and AATH implement agents that test the conformance of an agent to a given standard, such as the Aries Interop Profile (AIP). True or <mark>False</mark>?
+
+# Chapter 7
+
+So far in this course we have focused on how a controller injects business logic to control the agent and make it carry out its intended use cases. We have looked at how the controller manages the messages being exchanged by agents and the format and range of the messages that have been defined by the Aries Working Group. In this chapter, we’ll look at the architecture of mobile Aries agents. In doing that, we need to look more closely at message routing—how messages get from one agent to another. The routing part is applicable beyond mobile agents, but we’ve combined the two because routing is required from mobile agents. So, even if you aren’t interested in mobile agents, read on, because there are lots of other things to learn in this chapter.
+
+In this chapter, you will learn about:
+
+* Agent message routing, particularly the important roles of mediator and relay agents in mobile messaging, and especially in the Aries mobile wallet use case.
+* The concept of agency—a collection of cloud agents that service mobile Aries agents.
+* The role of the DIDDoc in message routing.
+* Emerging open source mobile agent projects.
+
+## Agent message routing
+
+While this chapter is eventually going to be about mobile agents, there is an important digression we have to make in order to understand why mobile agents work the way they do. We’ll get into mobile agents soon, but let’s first talk about the general topic of Aries message routing—how a message gets from its sender agent to its recipient. In this section, we’ll use the term "edge agent" to mean the ultimate sender and recipient agents, to differentiate from the intermediate "routing agents" that may be used solely to get the message from one edge agent to another.
+
+Based on what we have covered in the course so far, it’s easy to form a mental model of lots of edge agents interacting directly with one another; Faber College has its enterprise agent, Alice has her mobile wallet app on her smartphone and the two can message one another whenever the need arises. However, while two messaging agents appear to be directly connected, they often are not. Mediator and relay (terms we will formalize shortly) agents are often necessary to enable messages to be securely delivered from one agent to another because:
+
+* Mobile agents do not have an endpoint (a physical address) that other agents can use for sending messages. Thus, it is impossible for other agents to send messages directly to a mobile wallet app.
+* Entities may want to minimize correlation of their agent’s messages across relationships and so instead of having a unique endpoint per agent, many agents share a common endpoint (for example, https://agents-r-us.ca) such that their specific messages are "hidden in a crowd" of lots of other messages.
+* Entities may not want their inbound messages to be correlated to their outbound messages so they use different paths for sending and receiving messages.
+* An enterprise may want to have a single gateway for the use of the many enterprise agents they have in their organization.
+
+Thus, when a DIDComm message is sent from one agent to another, it is routed per the instructions of the receiver to the sender, and for the outbound needs of the sender. For example, using the following picture, Alice might be told by Bob to send messages to his phone (agent 4) via agents 9 and 3, and Alice might always send out messages via agent 2.
+
+In DIDComm, the term **domain** is used to indicate the group of agents that are working for a given entity. Alice’s domain has agents 1 and 2, and Bob’s agents 3, 4, 5 and 6. Agents 8 and 9 represent **agencies**—service providers that provide domain endpoints, host cloud agents and may provision edge agents on behalf of entities. Our concern in defining domain boundaries is how messages travel from one domain to another. What does Alice have to know to get a message both to Bob’s domain (the physical endpoint) and through to Bob’s edge agent (the sequence of agents)? Incidentally, there is a Cross-Domain Message [RFC (0094)](https://github.com/hyperledger/aries-rfcs/issues/239) that covers a lot of this material as well.
+
+<img src='https://courses.edx.org/assets/courseware/v1/5c29c635e7e4360e22dec82c4271c3e0/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-20.png' width=500>
+
+When Bob and Alice communicate, they want their message to be private—they don’t want the intermediate agents to see the contents of their message. So, when there are other agents between the two, Alice and Bob encrypt their messages with wrappers that provide only enough information for each intermediary agent to route (send) the message along on the next step of its end-to-end journey. These wrappers are the equivalent to a postal service envelope with just a "To" address on the outside of the envelope.
+
+To carry the postal system analogy a bit further, suppose Alice and Bob work in different offices of a corporation. Alice might write her message (on paper) for Bob, put it into an interoffice envelope addressed to Bob, and then in a postal service envelope addressed to the office in which Bob works. She mails the letter via the postal service and it gets delivered to the mailroom at Bob’s office. The outer envelope is removed in the mailroom, and the inner envelope is delivered to Bob via the internal mail system. Bob takes the message out of that envelope, and reads Alice’s message. This matches the DIDComm world exactly, with Alice using encryption for the envelopes, and the postal service and mailroom as intermediary agents to facilitate delivery.
+
+## Mediators and Relays
+
+In DIDComm, the term mediator is used for the list of agents Bob provides Alice through which Alice’s message will be routed. If there is no list of agents, the message will go directly to Bob, so her agent needs only to encrypt the message for transport to Bob. For each mediator, she explicitly adds another envelope, another layer of encryption and a "To" address. Thus, Bob’s "list of agents" is really just a list of encryption keys for Alice to use.
+
+**NOTE**: *As an aside, the folks designing the DIDComm spec have come up with some clever handling to prevent message bloat when there are multiple encryption envelopes. When you repeatedly encrypt the same content, the message can get quite large, and care has been taken to prevent that.*
+
+The term **relay** is used in DIDComm to indicate that the message is being routed through one or more additional agents *without* the knowledge of the sender. The important difference is that the sender must know about all recipient’s mediators and explicitly add envelope wrappers for each. They don’t know (or care) about the recipient’s relays. To stretch our paper message analogy a bit more, the mailroom in Bob’s building might deliver all the messages for Bob’s floor to an assistant who then distributes the messages to their recipients. Alice doesn’t know about that process, and the mailroom handles the "encryption" of putting the messages for Bob’s floor into an envelope.
+
+There is (of course!) an Aries RFC that covers mediators and relays in more detail—[RFC 0046](https://github.com/hyperledger/aries-rfcs/blob/main/concepts/0046-mediators-and-relays/README.md).
+
+To get back to our Alice and Bob’s agents picture, agents 9 and 3 are mediators because Bob explicitly tells Alice, "please send your messages to me through those agents." If Alice is sending her outbound messages via agent 2, then agent 2 is acting as a relay agent for her.
+
+**Mediators and relays are agents too!** An important item to underline here is that mediators and relays are themselves Aries agents. They may only do routing activities, or they may do other tasks on behalf of their controlling entity. They have a peer-to-peer relationship with other agents with which they interact, and they use that channel to coordinate the routing they will do on behalf of the edge agents, and to route the messages.
+
+## Mediators, Relays, and Privacy
+
+When messages pass through other agents there are some privacy implications that need to be considered. It is tempting to simplify the message handling as much as possible, but there are privacy reasons for being careful about how to do that. In this section, we’ll give you a taste of the threats to privacy that we are trying to mitigate with DIDComm. Keep these in mind as you think about deploying your DIDComm based services.
+
+Each time a mediator and relay agent receive a message and pass it on, they can record information about the message—metadata. Even though the agent can’t see the content of the message, they know at least that the message was sent, how big it is, when it was sent and where it will go next. It is well known that with existing communications systems, the collection of metadata can lead to major invasions of privacy. Telephone metadata (who called who, when and for how long), routinely collected by the telcos, enables the detailed tracking of an individual’s social and business relationships. Facebook and Google tracking your logins to other services provides them with information on your interests and frequency of use of that service. ISPs can likewise learn about your interests by tracking the websites you visit from your home computer and mobile phone.
+
+One of the goals in designing the DIDComm messaging protocol was to try to limit the metadata exposed in passing messages. The use of encryption for every wrapper and the minimal inclusion of information in the envelope (just a "To" address for the next step in the route) limits what metadata can be gathered. The use of multiple hops in the sequence limits the agents from knowing the early and later steps in the flow. From our Alice and Bob picture above, let’s consider what *could* be collected by the agents:
+
+* Every agent in the flow could try to decrypt the inner messages being passed along.
+  - As long as we are using updated, trusted encryption approaches this risk is mitigated—their decryption attempt would fail. That’s covered by DIDComm messaging.
+* Agent 9 can see the physical address from which a message came (e.g., from 2). However, it can’t see from where agent 2 got the message, so unless all and only Alice’s messages come from agent 2’s physical IP address, it won’t know it’s from Alice.
+  - This is a reason that Alice would likely not want to run her own agent on her own hardware at home as it would be easier to know when Alice was sending and receiving messages. Enterprises, on the other hand, might not be so concerned.
+* Agent 2 can see that messages are going to the physical address of agent 9. Again, as long as people/organizations other than just Bob are using agent 9 as a physical endpoint, agent 2 doesn’t know who the ultimate message recipient is.
+  - This is the "lost in the crowd" idea. Many people receive their messages at common physical endpoints, and the senders (and other Internet observers) don’t learn anything about the ultimate sender or receiver (e.g., Alice or Bob).
+* Agent 3 (Bob’s mobile agent mediator) knows every time Bob receives a message and when he picks up the messages.
+  - This is the same for almost any mobile application operating in conjunction with a cloud service.
+  - While not yet (as far as we know) implemented, in theory, Bob could have several mediators and use different ones for different connections.
+* Agent 3 does not know from whom the messages were received. Further, if Bob sends out his messages via a different agent (say agent 6), agent 3 does not know anything about Bob’s outbound activities.
+  - Of course, if agent 3 and agent 6 are operated by the same service, the service would know about all of Alice’s traffic. This leads to the question about how much you trust the service.
+* For a mobile agent, the data sent between the mediator and the mobile agent flows through the mobile service provider that Bob is using. They likewise can know when all the messages are flowing (inbound and out), but cannot decrypt the content of the messages.
+* The recipient agent (mobile or otherwise) can see the plaintext data of all of the messages so that data can be displayed for the user. Of course this is necessary and assumed, but from a privacy and security perspective, it should be considered as a risk. What if the Aries agent you are using is scraping the plaintext data presented on screen and sharing it with other parties?
+
+Those are at least some of the privacy threats to consider. A security/privacy maven would likely be able to find others. In comparison with the examples we gave (telcos, "login with" services, ISPs), the amount of exposed metadata is far less with DIDComm.
+
+In theory, by using different vendors for different agents you could further reduce the metadata each participant can gather. But that comes with its own challenges—for example, the need to engage with each of the different vendors. Other techniques have been suggested. These include:
+
+* Randomly sending "no-op" messages to reduce the knowledge gained about when you send/receive messages
+* Adding a chunk of throwaway data to messages to alter the size of the message.
+
+However, these complicate the creation of controllers. It’s all about tradeoffs.
+
+## Mobile agents and mobile agent mediators
+
+We’re supposed to be talking about mobile agents in this chapter, so why the in-depth look into message routing? While routing is an extremely important thing to understand about DIDComm and Aries agents in general, it is especially important for mobile agents—hence the digression.
+
+As noted in the previous section, mobile agents cannot be sent data directly. All data that gets to any mobile application (agents, games, email—any app) does so via the mobile app making a request to receive the data. <mark>As such, Faber’s agent cannot directly send a message to Alice’s mobile agent.</mark> It’s also impractical for Alice’s mobile agent to send requests to all of her connections to ask "Have you got a message for me?," on the off chance that they do.
+
+"Wait!," you say, what about all those notifications I get on my phone? Aren’t those sent to my mobile apps? While there is some ability to send notifications to a mobile app, the use of notifications is restricted by mobile operating system vendors (for example, Google and Apple). Only registered services may send notifications to an app, so arbitrary agents can’t message a mobile agent that way. The app stores limit the volume of notifications that can be sent, and require that notifications have an associated message displayed to the user when sent. <mark>As such, notifications cannot be used as a way to send messages to an Aries mobile agent.</mark>
+
+The bottom line is that in order to operate, <mark>a mobile agent **must** have a mediator agent through which all inbound (at minimum) messages must flow</mark>. As a result, if you are thinking about deploying a mobile agent, you also have to think about how you will deploy a cloud-based mediator agent, how it will be architected and what features it will provide.
+
+The mediator agent serves other purposes as well. Since mobile agents are not online at all times, and are not constantly polling to see if they have any incoming messages (that consumes phone resources, particularly data and battery), the mediator provides a queue to hold messages until the mobile agent requests them. The mediator could be registered with the mobile OS (iOS or Android) notification mechanism and let the user know when a message arrives in the queue, triggering a check with the mediator. A mediator could provide backup and restore capabilities for the mobile agent, backing up the agent periodically, and enable a UI supporting the restoration of the agent’s storage. The mediator could provide other services as well, but that would come down to trust. How much does the mobile agent owner want to trust the mediator? Let’s look at that next.
+
+## Mobile agent trust
+
+In the previous section we mentioned a few other services that the mediator agent could provide for a mobile agent. The amount that such an agent could do on our behalf is largely based on how much we can trust the mediator, and the vendor that is providing it. Let’s go over what you as a developer of applications in this ecosystem should be thinking about with respect to the trust your clients must have in your products.
+
+As mentioned in the earlier section on privacy, the mediator for a mobile agent will know more than any other about our messaging activity—timing of inbound (at least) messages, when messages are picked up, information about your mobile app (for example, the ISP and other information to connect with your mobile agent) and your use of any other services it provides. This is the same for any mobile application with an associated web service.
+
+The difference between Aries agents and other mobile apps is that in many cases, Aries agents hold keys that must be tightly held by the owner of those keys. As such, where those keys reside and how they are accessed is paramount in the client trusting the agents. In particular, the private keys that enable Aries protocols such as verifiable credential exchange, should be under the complete control of the agent’s owner, and ideally protected by a secure enclave such as is provided on mobile phones. That gives the owner confidence (trust) that the only way to access the agent and all that it is protecting.
+
+A suggestion we often hear from developers new to the community is about making a mobile agent that resides on the cloud as a web service and put only the user interface on the mobile phone. This would be extremely easy to do with ACA-Py since you would only be building the controller on the mobile device. The problem with that approach is that all of the owner’s keys would reside on the web service infrastructure and not in the direct control of the owner. The owner would have to trust that the web service would not do anything with the private keys they are holding. That’s a big leap compared to having the keys locally, and not one we would recommend except (perhaps) where there are no other options.
+
+So, while it is tempting with Aries to build centralized components, as is often effective in other business domains, be careful in doing that. Make sure that the control, particularly of private keys and the use of those private keys is as close to the owner as possible. Using cloud services run by vendors that are just passing along encrypted messages is likely safe enough and necessary. Using cloud services run by vendors that are (for example) actually receiving credentials and proving claims about an entity (a person or an organization) must be considered with skepticism.
+
+## Message encryption handling
+
+The DIDComm encryption handling is performed within the Aries agent, and not really something a developer building applications using an agent needs to worry about. Further, within an Aries agent, the handling of the encryption is left to libraries—ultimately calling dependencies from Hyperledger Ursa. To encrypt a message, the agent code calls a `pack()` function to handle the encryption, and to decrypt a message, the agent code calls a corresponding `unpack()` function. The "encryption envelope" described in [RFC 0019](https://github.com/hyperledger/aries-rfcs/blob/main/features/0019-encryption-envelope/README.md) for AIP 1.0 and [RFC 0587](https://github.com/hyperledger/aries-rfcs/tree/main/features/0587-encryption-envelope-v2) for AIP 2.0 define variations for sender authenticated and anonymous encrypting. With authenticated messages, the keys of the sender and recipient are used together for the encryption, so the recipient knows exactly who the sender is. With anonymous encryption, only the public key of the recipient is used, so anyone who knows that key can send a message. In DIDComm, authenticated encryption is generally used for all "sender-to-recipient" message encryption, while anonymous encryption is generally used only for messages to and from mediators and relays. Much thought has also gone into repudiable and non-repudiable messaging, as described in [RFC 0049](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0049-repudiation).
+
+## Establishing a connection with routing
+
+To this point in the course when we’ve talked about establishing a connection, we’ve assumed the two agents are able to talk *directly* to one another. With the scenario described below, mediators are involved in the connection. As you will see, this process seems to be (Ok, it is) pretty complicated, and it’s useful to understand what’s happening. The good news is that for an Aries developer building and deploying an Aries application, the details of using mediators is a deployment and configuration issue, and not a coding issue. We’ll cover some of the details at the end, but once you configure your agent to use a mediator, and optionally, deploy your own mediator, everything else should be taken care of automatically by the Aries framework. If the agent your application is connecting to, whatever mediators that agent requires will definitely automatically be handled by the Aries framework.
+
+## The scenario
+
+We'll use the same Alice and Bob example we used earlier. Here’s that picture again.
+
+<img src='https://courses.edx.org/assets/courseware/v1/5c29c635e7e4360e22dec82c4271c3e0/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-20.png' width=500>
+
+Bob and Alice want to establish a connection so that they can communicate. Bob uses an agency endpoint (such as https://agents-r-us.ca), labelled as 9 and will have a mediator agent, labelled as 3. We'll also focus on Bob's messages to and from his main mobile agent, labelled as 4. We'll ignore Bob's other agents (5 and 6) and we won't worry about Alice's configuration (agents 1, 2 and 8). While the process below is all about Bob, Alice and her agents are doing the same kinds of interactions within her domain.
+
+Note that this scenario is actually more complex than is generally expected in the current versions of agents. Usual practice today is just to have a mediator agent service run by the same organizations that make their mobile agent available in the app store. While a bit more complicated, the following really illustrates what’s going on.
+
+A DID and DIDDoc are generated by each participant in each relationship. For Bob's agents (mobile agent and mediator), that includes:
+
+* Bob and Alice
+* Bob and his mediator agent
+* Bob and the agency
+
+That's a lot more than just the Bob and Alice relationship we usually think about!
+
+From a routing perspective, the important information in the DIDDoc is the following (as defined in the DIDDoc Conventions [RFC 0067](https://github.com/hyperledger/aries-rfcs/blob/master/features/0067-didcomm-diddoc-conventions/README.md)).
+
+* The public keys for agents referenced in the routing.
+* A service element of type did-communication, including:
+  - the one `serviceEndpoint`
+  - the `recipientKeys` array of referenced keys for the ultimate target(s) of the message
+  - the `routingKeys` array of referenced keys for the mediators
+
+Recall that a DIDDoc is what you get when you resolve a DID, regardless of where that DID is published (and even if it is not published). Shown below is an example of these elements of a `service` definition section of a DIDDoc. We saw this in the mediators lab we did earlier. In this example, there is one recipient of the message and one mediator.
+
+```JSON
+{
+  "service": [{
+    "id": "did:example:123456789abcdefghi#did-communication",
+    "type": "did-communication",
+    "priority" : 0,
+    "recipientKeys" : [ "did:example:123456789abcdefghi#1" ],
+    "routingKeys" : [ "did:example:98490275222" ],
+    "serviceEndpoint": "https://agent.example.com/"
+  }]
+}
+```
+
+Let's look at the did-communication service data in the DIDDocs generated by Bob's mobile and mediator agents for the set of relationships involved. Recall that there are three relationships, and with two DIDDocs per relationship, we have six(!) DIDDocs to look at. Note the term "key reference" all through the following tables. In most cases, that will be an instance of a "did:key." Recall from our discussion in Chapter 4 that "did:key" is a plain public key and key type that is formatted as a DID. An example of a "did:key" is in the JSON above.
+
+| Bob's DIDDoc for Alice: |  |
+|---|---|
+| `serviceEndpoint` | The endpoint (often an HTTP URL) for the agency.  This could be empty if the `routingKeys` (below) contains a public DID for the agency. In that case, the public DID would contain the endpoint. |
+| `recipientKeys` | A key reference for Bob's mobile agent specifically for Alice. |
+| `routingKeys` | Key references to the public keys for the agency and mediator agent. Perhaps a public DID is used for the agency rather than a key reference. |
+
+```JSON
+{
+  "service": [{
+    "id": "did:peer:bob-for-alice#did-communication",
+    "type": "did-communication",
+    "priority" : 0,
+    "recipientKeys" : [ "did:peer:bob-for-alice#keyagreement" ],
+    "routingKeys" : [ "did:key:mediator123", "did:key:agency123" ],
+    "serviceEndpoint": "https://agents-r-us.ca/"
+  }]
+}
+```
+
+| Alice’s DIDDoc for Bob: |  |
+|---|---|
+| `serviceEndpoint` | Depends on Alice’s inbound messages configuration. From our picture, it’s likely a URL for the Alice agency ("8" in the picture). |
+| `recipientKeys` | A key reference for Alice’s mobile agent specifically for Bob. |
+| `routingKeys` | Depends on Alice’s agent inbound messages configuration. From our picture, likely key references for agents "8" and "2". |
+
+| Bob’s DIDDoc for his mediator agent: |  |
+|---|---|
+| `serviceEndpoint` | Null, because Bob's mobile agent has no endpoint (see the note below for more on this). |
+| `recipientKeys` | A key reference for Bob's mobile agent specifically for the mediator agent. |
+| `routingKeys` | Empty—there are no routing agents between Bob and his mediator. |
+
+```JSON
+{
+  "service": [{
+    "id": "did:peer:bob-for-mediator#did-communication",
+    "type": "did-communication",
+    "priority" : 0,
+    "recipientKeys" : [ "did:peer:bob-for-mediator#keyagreement" ],
+    "routingKeys" : [ ],
+    "serviceEndpoint": null
+  }]
+}
+```
+
+**NOTE**: *The null serviceEndpoint for Bob's mobile agent is worth a comment. Mobile apps work by sending requests to servers. As we’ve covered earlier in the course, the server has no way to directly access the mobile app. A DIDComm mechanism called Transport Return Route [(RFC 0092)](https://github.com/hyperledger/aries-rfcs/tree/main/features/0092-transport-return-route) defines how a server can get messages to an agent to which messages cannot be sent. Instead of the mediator agent sending the message, it holds the message until the mobile agent makes an HTTP request (or a web socket connection) to the mediator. The mediator then transports the message back to the mobile agent using the HTTP response. While this approach doesn’t work well for a mobile agent getting direct messages from all it’s connections (e.g., Alice, Faber, Acme, etc.), it does work well for a mobile agent having a single mediator that handles all its connections. As well, cloud agents can use mobile platforms' (Apple and Google) notification mechanisms to trigger a user interface event so the person (and app) know there are messages queued.*
+
+| Bob’s mediator’s DIDDoc for Bob: |  |
+|---|---|
+| `serviceEndpoint` | A physical endpoint for Bob's mediator agent. |
+| `recipientKeys` | A key reference for the mediator agent specifically for Bob. |
+| `routingKeys` | Empty, since the two agents are directly connected. |
+
+```JSON
+{
+  "service": [{
+    "id": "did:peer:mediator-for-bob#did-communication",
+    "type": "did-communication",
+    "priority" : 0,
+    "recipientKeys" : [ "did:peer:mediator-for-bob#keyagreement" ],
+    "routingKeys" : [ ],
+    "serviceEndpoint": "https://agents-r-us/mediator123"
+  }]
+}
+```
+
+| Bob’s DIDDoc for the agency: |  |
+|---|---|
+| `serviceEndpoint` | The physical endpoint for Bob's mediator agent. |
+| `recipientKeys` | A key reference for Bob's mobile agent specifically for the agency. |
+| `routingKeys` | A key reference to Bob’s mediator agent. |
+
+```JSON
+{
+  "service": [{
+    "id": "did:peer:bob-for-agency#did-communication",
+    "type": "did-communication",
+    "priority" : 0,
+    "recipientKeys" : [ "did:peer:bob-for-agency#keyagreement" ],
+    "routingKeys" : [ "did:key:mediator123" ],
+    "serviceEndpoint": "https://agents-r-us/mediator123"
+  }]
+}
+```
+
+| Agency DIDDoc for Bob's mediator: |  |
+|---|---|
+| `serviceEndpoint` | A physical endpoint for the agency. |
+| `recipientKeys` | A key reference for the agency specifically for Bob's mobile agent. |
+| `routingKeys` | Is empty—Bob’s agent sends messages directly to the agency. |
+
+```JSON
+{
+  "service": [{
+    "id": "did:peer:agency-for-bob#did-communication",
+    "type": "did-communication",
+    "priority" : 0,
+    "recipientKeys" : [ "did:peer:agency-for-bob#keyagreement" ],
+    "routingKeys" : [ ],
+    "serviceEndpoint": "https://agents-r-us"
+  }]
+}
+```
+
+## Preparing Bob's DIDDoc for Alice
+
+Given that background, let's go through the sequence of events and messages that occur when Bob and Alice first connect so that Bob's agent can construct the service part of the DIDDoc to send to Alice's agent.
+
+### Bob and the mediator
+
+Before Alice and Bob can start the process to establish a connection with one another, Bob must initialize his routing setup. To do that, Bob’s agent first establishes DIDComm connections with the mediator and agency agents, and then asks each if they will mediate for him. If the same vendor is providing all of Bob’s agents, it’s possible that process might be done in some proprietary way—that’s how it was done in AIP 1.0. However, with AIP 2.0, a new protocol called "coordinate-mediation" ([RFC 0211](https://github.com/hyperledger/aries-rfcs/tree/main/features/0211-route-coordination)) was added that enables generic mediators to be deployed and used. The protocol has a few messages ("mediate-request", "mediate-grant" and "keylist-update") that we’ll use in the following processes.
+
+* mediate-request: an agent (e.g., Bob’s mobile wallet) asks a mediator to provide mediator services such as forwarding messages to the asking agent.
+* mediate-grant: The mediator agrees to provide mediation services, and gives a key reference (usually a "did:key") that the asking agent can share with their connections in the `routingKeys` array.
+* keylist-update: While establishing a connection, the asking agent sends a key reference to the mediator for the new connection to say in effect, "when you see a message for this key, please send it to me." The mediator maintains what amounts to a routing table of all the keys for which it might receive messages and for each, an agent to whom the message for that key should be sent.
+
+For this example, we’ll assume that Bob’s agency and mediator are independent and using the "coordinate-mediation" protocol. First, Bob’s agent and the mediator agent establish their relationship, as follows:
+
+* Bob’s mobile agent (somehow) connects to the mediator agent (agent 3 in our picture)—perhaps triggered by a link in the app.
+* Once connected, Bob’s mobile agent sends a "mediate-request" message to the mediator agent.
+* The mediator agent agrees, and sends back a "mediate-grant" message with a public key and endpoint for the mediator. Bob will use the public key in DIDDocs for his connections, such as to the agency and later, to other connections like Alice.
+
+As mentioned before, the [RFC 0092](https://github.com/hyperledger/aries-rfcs/tree/main/features/0092-transport-return-route) Transport Return Route protocol will be used to allow Bob’s mobile wallet to get the messages from the mediator agent even though the wallet doesn’t have an endpoint.
+
+### Bob and the agency
+
+With Bob’s mobile agent now having a mediator, let’s add the agency (agent 9 in our picture) as a second mediator for Bob. In this case, the agency is just a "lost in the crowd" mediator, allowing many agents to share the same endpoint, so no outside observer can tell who is the ultimate receiver of each message.
+
+Here’s the process:
+
+* Bob’s mobile agent connects to the agency (agent 9 in our picture), likely triggered by a QR code from the agency that Bob scans. That generates a DID for the connection.
+* Bob populates the the DIDDoc for the agency with the following:
+  - The did-communication service endpoint is the mediator agent endpoint.
+  - The recipientKeys array is populated with a DID containing Bob’s public key for the agency.
+  - The routingKeys array populated with a DID containing the public key that Bob has from his mediator agent.
+* Before sending the response to the agency, Bob first has to let the mediator agent know that messages using a new "to" agency DID should be sent to Bob.
+  - To do this, Bob sends a "keylist-update" message to the mediator agent to say "when you see messages for this DID, send them to me." The mediator starts forwarding messages sent by the agency to Bob’s agent.
+* Bob’s mobile agent sends a "mediate-request" message to the agency.
+* The agency agrees and sends back a "mediate-grant" message containing a public key and endpoint for the mediator. Bob will use both in DIDDocs for his connections, such as Alice.
+
+Initialization is done, and routing is established. The example would be a lot easier just to have one mediator, but what’s the fun in that! With two, you see all the details—adding more mediators is just the same again. In the vast majority (perhaps all so far?) real deployments of Aries mobile wallets, only a single mediator is used.
+
+### Connecting to Alice
+
+Let’s assume that Bob's mobile agent receives an out-of-band connection invitation message from Alice—perhaps via a QR code or a link in an email. With the initialization in place, the steps for Bob to follow to prepare his side of the connection is as follows:
+
+* Bob's mobile agent generates a new DID for Alice and prepares and partially completes a DIDDoc, including the public key(s) that he will use when sending messages to Alice.
+  - The did-communication service endpoint is the agency endpoint.
+  - The `recipientKeys` array is populated with a DID containing Bob’s public key for Alice.
+  - The `routingKeys` array is populated with: a DID containing the public key that Bob has from the agency and a DID containing the public key that Bob has from his mediator agent.
+* Before sending the response to Alice, Bob first has to let the mediator agent know that messages using a new "to" Alice DID should be sent to Bob.
+  - To do this, Bob sends another "keylist-update" message to the mediator agent to say "when you see messages for this DID, send them to me." The mediator is now forwarding messages sent by the agency and Alice to Bob’s agent.
+
+Note that the agency doesn’t need to know about Alice at all. It will receive messages from Alice (although the agency won’t know who that is), check the "next hop" DID and use the information from Bob to figure out it must send the message to the mediator agent.
+
+If there is a public DID used for the agency, Alice will have to resolve (look up on a public ledger) the DID of the agency to get the public key for the agency. Done that way, the agency, which presumably has many users, each with many relationships, can just update its public DID information to, for example, rotate its key, rather than having that done by every user of the agency, for every relationship they have. The downside of that is that Alice has to regularly check the public ledger for changes to the agency’s DIDDoc.
+
+### Completing the connection
+
+With the DIDDoc ready, Bob uses the path provided in the invitation to send a connection-request message to Alice with the new DID and DIDDoc. Alice now knows how to get any DIDComm message to Bob in a secure, end-to-end encrypted manner. Subsequently, when Alice sends messages to Bob's agent, she uses the information in the DIDDoc to securely send the message to the agency endpoint, from which it is sent to the mediator agent and on to Bob's mobile agent. And with that, Bob has the information he needs to securely send any DIDComm message to Alice in a secure, end-to-end encrypted manner. Connection established!
+
+### Alice messages Bob
+
+Based on the DIDDoc that Bob has sent Alice and the internal configuration that Alice uses to send messages, the following are the steps that Alice carries out in order to send a DIDComm message to Bob:
+
+* Prepares the message for Bob's agent.
+* Encrypts and places that message into a "forward" message for Bob's mediator agent.
+* Encrypts and places that message into a "forward" message to Bob's agency endpoint.
+* Encrypts and places that message into a "forward" message to Alice’s outbound relay.
+* Sends that message to her outbound relay.
+
+**NOTE**: *The first two "forward" messages are required because of what Bob put into his DIDDoc for Alice. The last is independent of what Bob’s agent requires and is needed because of how Alice’s agent has decided her outbound messages should be handled. Alice could have just skipped that last forward and sent the message straight to Bob’s agency endpoint, no relay required.*
+
+## Lab: Using a mediator
+
+The ACA-Py Aries framework repository includes functionality for a basic mediator agent using an instance of ACA-Py using the two AIP 2.0 mediator-related Aries RFCs. That means that in the repository is actually a controller implementation of a mediator agent. As well, the ACA-Py framework itself contains functionality to allow an ACA-Py-based Aries agent to be a client of a mediator. Let’s use those capabilities to create a mediator for Alice to use in her connection with Faber.
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/MediatorLab.md) to get started on the mediator lab.
+
+## Open source mobile wallets
+
+It’s obvious that particularly for the self-sovereign identity use cases we’ve been talking about, mobile wallets are crucial. To date there have been a number of good closed source agents deployed to the Google and Apple App stores. These wallets, built on AIP 1.0 for interoperability, have enabled the success of many production and proof-of-concept applications. Although the wallets are closed source, a number of them have been built on the open source Aries Framework .NET.
+
+For several reasons, it is desirable to have open source wallets that can be deployed by appropriate organizations. An open source wallet in this context includes core Aries functionality (a framework) and as much of the user experience as possible. Let’s look at why open source wallets are likely to be important as Aries agents go mainstream.
+
+Perhaps the most important reason to have an open source wallet is to ensure that the code and functionality in the wallet is transparent and auditable. Users are trusting their wallet apps to manage their keys and credentials. No one wants a wallet that (for example) shares private data about the user, or exploits that information for profit, such as using the information to market to the user ("Hey, I see you presented your Driver’s License to the police. Do you want me to connect you to a good lawyer?"). We’ve seen this type of exploitation with web browsers, and we definitely don’t want a repeat of that, especially with an app whose explicit purpose is to manage a user's private data. Important issuers and verifiers, such as businesses and governments, want to be certain that their users have wallets that are known to be safe and secure. Open source is a great way to achieve such a certainty.
+
+Most vendors to date have built wallets not to make money on the wallet itself, but rather, to enable use cases for the issuer/verifier applications they are building to sell to enterprises. For the reasons outlined in the previous paragraph, the wallet "business model" is tricky, with end users not wanting to pay for the service, and issuers, verifiers and privacy regulators extremely leary of any sort of "exploitation"-based business model. As such collaborating on a wallet, sharing the one-time engineering costs, can result in a more capable wallet, while enabling the powerful, verifiable credential-based use cases we all want to see.
+
+Next, since many of the wallet vendors are only creating wallets for their specific use cases, they often may not be able to afford to investigate and implement features that work beyond their use cases. For example, features such as internationalization, staying up to date on evolving Aries protocols, messaging, adding new verifiable credential formats, using the wallet as a verifier, and defining new protocols to enable fantastic wallet user interfaces are often not top of mind. Open source wallet projects allow multiple organizations to collaborate on those issues versus each spending the same money working independently on their wallets.
+
+A final reason we’ll cover that argues for open source collaborations for wallets is the tendency for early players in the field to embed wallet functionality in their existing apps, so their users have a familiar (and branded) place to use their credentials. While this may work for a user’s first experience with verifiable credentials, it precludes the ability to combine credentials into a single presentation, and could make things confusing for users ("which app is holding credential x???"). While we need ways to enable great user experiences for the clients of businesses, we’d really like to do that with a single credential and keys store.
+
+Our advice if you are looking to provide a wallet for your business is to join one of the open source wallet communities, and contribute to what is being created there. Don’t go it alone!
+
+Let’s look at the open source wallets that are the most promising as this course is updated in mid-2021.
+
+### Aries Mobile Agent - Xamarin ("Aries MAX")
+
+The Aries Mobile Agent-Xamarin ("Aries MAX") was started as a combined effort of teams from [trinsic.id](https://trinsic.id/) and [Mattr Global](https://mattr.global/) in 2019 (eons ago in SSI time!). The repo for Aries MAX can be found here. Aries-MAX is based on the [aries-framework-dotnet](https://github.com/hyperledger/aries-framework-dotnet)—the same library that powers the Trinsic, estatus, LISSI and IdRamp commercial mobile agents, and the Trinsic Studio that we looked at earlier in the course. Aries MAX wraps the framework code with [Xamarin](https://dotnet.microsoft.com/apps/xamarin), Microsoft’s open source development platform for creating mobile iOS and Android applications.
+
+Aries MAX provides a mobile agent and a basic cloud mediator agent suitable for local deployments. Further, given the maturity of its aries-framework-dotnet foundation, Aries-MAX is a complete open source component for mobile wallet deployments, handling AIP 1.0 connections, receiving credentials and proofing claims and more.
+
+A stumbling block for some teams getting started with a mobile agent is Aries MAX’s C#/.NET and Xamarin basis. That’s a non-starter for some mobile teams looking to use a framework such as [React Native](https://reactnative.dev/) for mobile development. And that’s where our next open source mobile option comes into play.
+
+### Aries Mobile Agent - React Native ("Bifold")
+
+A second Aries open source wallet project is known by its long name (the one used for its GitHub repository) "[Aries Mobile Agent React Native](https://github.com/hyperledger/aries-mobile-agent-react-native)," and its short name "Aries Bifold" (as in the name for a type of physical wallet). In this course, we’ll go with the short name. As with Aries-Max, Aries Bifold, is built on a major (although quite a bit newer) open source Aries Framework called Aries Framework JavaScript. Given the JavaScript basis of the [React Native](https://reactnative.dev/) mobile framework in Aries Bifold, it’s no surprise that the JavaScript Aries framework underlies Bifold. As well as Aries Framework JavaScript, a second dependency of Bifold is the React Native Indy SDK ([rn-indy-sdk](https://github.com/AbsaOSS/rn-indy-sdk)), providing the Indy ledger and AnonCreds capabilities. The following are a brief summary of each of the Aries/Indy repositories that make up Aries Bifold.
+
+The Aries Framework JavaScript project has been around since late 2019, evolving slowly, at first powered by a small team of maintainers. That pace picked up significantly when the Aries Bifold project took off and its team realized that Bifold could really benefit from the work already completed on Aries Framework JavaScript. At the time this course was updated (mid-2021), development on Aries Framework JavaScript is fast-paced, with build tags being applied about every second day. Major short-term roadmap items (full AIP 1.0 support, standard mediator protocols) are being delivered and attention is moving on to cover both the needs of Aries Bifold (enabling a great mobile experience) and adding AIP 2.0 functionality, such as support for holding and proving W3C standard JSON-LD verifiable credentials.
+
+Another nice benefit of using Aries Framework JavaScript is that it has an Aries Agent Test Harness backchannel, and so is being tested daily against the other Aries frameworks.
+
+The second Aries Bifold dependency open source project is a React Native library for Indy ledger and AnonCreds functionality—[rn-indy-sdk](https://github.com/AbsaOSS/rn-indy-sdk). This project is a contribution from Sovrin Steward and longtime Aries contributor [Absa Bank](https://www.absa.co.za/personal/) in South Africa.
+
+The React Native Indy SDK is an implementation of an indy-sdk wrapper for React Native, much like there are for other languages—Python, C#/.Net, Java and so on. While that is a step back from an Aries component, it addresses one of the more challenging parts of building an Aries mobile agent—getting the low-level cryptography dependencies packaged for use in a React Native app. With an Indy SDK in place, the Indy-related agent capabilities (key generation, signing/verifying, encrypting/decrypting, etc.) in Aries Framework JavaScript can be invoked in a React Native environment. Another key building block!
+
+Which of course brings us to the Aries wallet part of the project, the Aries Bifold repository itself. The repository pulls in the dependencies (Aries Framework JavaScript and the React Native Indy SDK), adds in the React Native framework, and then a wallet mobile experience. From just the components in the Aries Bifold repository, a developer can run a simulation of an Android version of the app on their laptop/desktop, and can build and load onto mobile devices Android and iOS versions of the wallet.
+
+## Lab: Open Source Mobile agent projects
+
+In this lab, we’ll take a look at the state of open source mobile agents in Aries. The lab involves running a development instance of the wallets on a simulator on your development system (a laptop or desktop). Since the simulator can’t be run using Docker, it’s a little more effort to set up a development environment—especially if you are new to developing mobile apps.
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/MobileAgentLab.md) to go to the lab.
+
+
+## Knowledge check 7
+
+1. Mobile agents can use notifications as their endpoints for messages from other agents. True or <mark>False?</mark>
+2. Mobile agents need mediator agents to receive messages sent by other agents. <mark>True</mark> or False?
+3. From a routing perspective, the important information in the DIDDoc is (Select all answers that apply):
+  * <mark>The public keys for agents referenced in the routing</mark>
+  * <mark>The service element of type did-communication</mark>
+  * Message encrypting
+  * <mark>`routingKeys`</mark>
+4. A DIDDoc is established when Alice and Bob agents connect. True or <mark>False</mark>?
+  * False. When Alice’s and Bob’s agents establish a connection, two DIDDocs are created, one by each of Alice and Bob (i.e. two DIDDocs per relationship). *Stupid question...*
+
+## Summary chapter 7
+
+Routing is a pretty intense topic, eh?! There is a lot going on when it comes to Aries mobile agents. The key take-aways from this chapter are:
+
+* Agents are often not directly connected, and in fact, sometimes cannot be directly connected (for example, mobile agents).
+* Mediator agents play a key role in Aries agent routing and are required for Aries mobile agent apps. If you are developing mobile apps, you will need to consider how you will deploy your cloud-based mediator agent.
+* An agent provides instructions (in the DIDDoc) for how another agent should be routed to it during connection establishment.
+* While you might be tempted to build your own mobile agent, before doing so consider instead sharing the effort, by contributing to and deploying an open source wallet.
+* There are several open source mobile wallets that can be used as starting points for deploying your own mobile agent.
+
+# Chapter 8
+
+Now that you have explored building your own Aries controller or mobile wallet, let’s talk about actually getting it into production. This chapter describes some of the things you need to be aware of in the production context, things that are important to the Aries environment. While the vast majority of the content of this chapter will be in the context of enterprise versus mobile agents, we do touch on mobile agent production as well. Important stuff!
+
+In this chapter, you will learn about:
+
+* Mobile agent deployment challenges such as pushing an app to the app store.
+* Keeping ledgers and agent storage in sync.
+* Writing to a sandbox ledger versus a production one.
+* Managing writes to production ledgers, especially permissioned ledgers and those that charge for writes.
+* Considerations for the management of your agent, such as backup and restore.
+* Horizontal scaling of high-volume, enterprise issuer agents.
+* Running many logical agents in a single deployment—multi-tenant deployments.
+* Some advanced Aries framework capabilities that are important for some use cases.
+
+## Production challenges - mobile wallet apps
+
+The bulk of this chapter will be about production issues around enterprise agents, particularly issuer agents. But we’ll first touch briefly on mobile wallets and the challenges they bring.
+
+**NOTE**: *We are not experts in mobile development so these are based on our observations and experiences only.*
+
+The biggest challenge with Aries mobile wallets is likely the same with all mobile apps—agent distribution. In particular, there are two issues related to the distribution of new versions:
+
+* Dealing with the app stores’ release processes—getting each release of your app through the gates that Apple and Google define.
+* Getting users to upgrade to the latest version so that you can drop support for deprecated features in older versions.
+
+For those of us that have grown comfortable (and complacent) in deploying web services that have but a single deployment, having to distribute and upgrade apps on (hopefully) millions of mobile phones creates a much bigger backwards compatibility problem. Sure, with a web service we have to make sure that the web API provides backward compatibility, but that’s a more manageable problem. As well, while Google and Apple are aggressive in pushing users to update their apps on a more or less continuous basis, it’s still a challenge to keep things working across a range of "stable" releases that users might be running.
+
+## Community upgrade process
+
+This backwards compatibility challenge is exacerbated in the Aries world because you want your mobile wallets integrating with a range of other agents. We’ve talked a lot about interoperability and the Aries Interop Profile (AIP) in Chapter 5. Having agents (mobile and server based) that align to AIP versions and are tested for interoperability is crucial for the community of agent builders. For these applications to succeed, they all have to be able to work together!
+
+A second mechanism that is important for managing upgrades in Aries is the "Community Coordinated Update," as described in [RFC 0345](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0345-community-coordinated-update). <mark>This mechanism is used when the Aries community agrees on the need to make a breaking change to the protocols agents are using</mark>. We want such changes to be made carefully so that each agent maker can make the changes independently, and all agents will continue to interoperate throughout the transition. With RFC 0345, we have a template process that coordinates a breaking change using a series of steps that gives time for (hopefully) all deployed agents to be <mark>updated without breaking agent-to-agent interoperability</mark>.
+
+Mobile wallets have to be particularly aware of these community coordinated updates because not only do they have to make the changes in their code, but they have to get a new version with that code change distributed to (again, hopefully!) millions of users. To enable global interoperability, it’s not sufficient that only creators of Aries components (especially frameworks) communicate about updates, but for mobile wallet operators to let the rest of the community know about their status—what protocol changes they have made, what protocol changes are in the works, and what’s their latest on interoperability.
+
+## Mobile wallet interoperability testing
+
+How can a wallet publisher let others know about their interoperability profile? We’ve talked earlier about the Aries Agent Test Harness (AATH, covered in Chapter 6), an automated tool for testing the interoperability of Aries Test Agents, such as Aries frameworks, and the special AATH Mobile Backchannel. Although a manual process, it does let the maintainers of the open source wallets determine their wallet’s level of interoperability, and lets users of deployed open source wallets see that for themselves. Two things that would be really nice to have in AATH are the following:
+
+* An extension to the Mobile Backchannel to allow formal reporting of tests that were run (what wallet was tested, and what tests passed/failed).
+* A way to run the tests automatically for a given mobile wallet on a periodic basis (e.g., daily)
+
+If you have ideas on how to make that happen, please connect (on Hyperledger Chat) with the AATH developers!
+
+## Deploying a mediator or not
+
+Beyond deploying the mobile agent to the mobile OS App stores, each mobile wallet will need (as we’ve discussed in Chapter 7) a mediator to at least serve as the target physical endpoint for other agents sending messages to the wallet. The mediator may do other things as well for the wallet, such as act as an outbound relay, manage wallet backup and restore capabilities and so on. It’s up to you, the mobile wallet provider, what you want the mediator service to do—beyond the minimum of routing messages. You have several options for providing a mediator, so let’s look at what’s possible.
+
+A (relatively) simple option is to deploy an instance of ACA-Py (or another Aries framework) that supports the Aries mediation protocols, notably [RFC 0211](https://github.com/hyperledger/aries-rfcs/tree/main/features/0211-route-coordination) Route Coordination and [RFC 0212](https://github.com/hyperledger/aries-rfcs/tree/main/features/0212-pickup) Pickup. Your mobile wallet app must support those same Aries mediation protocols, but as a client. Any other features you want to add to improve your app user’s experience would be added as part of the controller. Of course, while configuring an instance of ACA-Py to use for mediation is pretty easy for testing, setting it up to support millions of mobile wallet apps (because that’s your goal, right?) is a little more challenging. The good news is that we cover deploying scalable, server-side Aries agents (which is what a mediator agent is) in the next section of this chapter.
+
+A second option is to write a custom mediator "agent" that works with the mobile wallet app you will deploy. Since a mediator doesn’t do a lot of agent-y things, using an Aries framework as the basis of a mediator may not be a huge advantage, and it may make more sense to write your own component that handles all the other features you want (perhaps some services for which you can charge), and includes the minimum Aries protocol support to be a mediator. The API between the wallet and the mediator can be custom between the two, or you can implement the two mediator protocol RFCs referenced above. This "custom mediator" approach was implemented successfully in the early AIP 1.0 Aries wallet apps and is definitely a viable strategy.
+
+With the advent of the Aries mediation protocols RFCs linked above, a third option has become possible—use a third-party mediator. Anyone can set up a mediator that uses the mediation protocols and serve as a mediator for any mobile wallet app that supports those protocols. Indicio.tech has done just that. Check out https://indicio-tech.github.io/mediator/, where a public mediator has been made available that anyone can use. Your wallet app could use a specific public mediator, or you could even make it possible for your users to pick their own mediator.
+
+Lots of options! We recommend using the easiest option you have first, learning more about the problem and then making a decision on the best approach for your use case. The easiest is probably the use of the public mediator if your wallet supports the mediator protocols, or a simple custom mediator if not.
+
+## Mobile wrap up
+
+That’s all we have for mobile agents. The rest of this chapter is largely focused around challenges with running enterprise agents in production. We’ve had our fair amount of experience (and battle scars) in dealing with production use cases and we hope the things that we’ve learned along the way will make it easier for you. Certainly this is not an exhaustive list, but it will give a good starting point. You’ll know a lot more than we did when we got started!
+
+## Working with production Indy ledgers
+
+This section mostly deals with working with Indy production ledgers, such as Sovrin MainNet. Most of this section also applies to the test networks made available by organizations such as Sovrin that operate production ledgers. While to this point in the evolution of Aries, the focus has been on the use of Indy ledgers, we’ll also touch briefly on impacts of using non-Indy ledgers.
+
+### Sandbox versus production-secure storage handling
+
+As you develop your first Aries controllers and deploy your first proof-of-concept using a sandbox ledger, you can get quite complacent in managing the ledger and your agent’s secure storage. If things aren’t working, it’s easy to just entirely reset a sandbox ledger, reset your agent(s) storage, and start again. In fact, particularly during development, it’s often the case that things unintentionally get out of sync between the objects on the ledger and what’s in agent secure storage. When that happens, you are forced to delete everything and start again. That’s OK during development, but in production, you won’t have that luxury—you can’t afford to lose your secure storage!
+
+Some production ledgers (for example, Sovrin production MainNet) there is a fee for writing to the ledger and you don’t want to pay more than you have to. Even more important, if you are an issuer of credentials, if you lose access to your secure storage, you won’t be able to issue credentials based on the objects you have already put on the ledger. The simple reality is that once you are in production, you must remember that your storage is a production database that must be handled appropriately—back it up, be able to restore it and always, always keep it secure. On that last part, security: you don’t want someone to steal the keys in your secure storage and be able to act in your place!
+
+### Agent Storage Backup and Restore
+
+As was covered extensively in the prerequisite for this course ("Introduction to Hyperledger Sovereign Identity Blockchain Solutions: Indy, Aries & Ursa" ([LFS172x](https://www.edx.org/course/identity-in-hyperledger-aries-indy-and-ursa))), backup and restore of agent secure storage is crucial to the long term usefulness of this technology. While that may be less important in the early days for mobile wallets (users do not write to a public ledger and should be able to get credentials easily reissued), backup and restore for enterprise Aries agents is crucial from day one.
+
+Fortunately, unlike the mobile use case, backup and restore for the enterprise use case is a well understood problem. Enterprise agent storage should use an enterprise database, such as PostgreSQL, and all of the tools and techniques that have been developed over the years to manage such an enterprise database. There should be nothing special about enterprise agent secure storage from a database perspective than any other enterprise database. As such, the following guidelines apply:
+
+* Backup the data regularly, either fully or incrementally using logs, depending on the use case.
+  - The specific approach taken depends on the answer to the question: how much data can you afford to lose if the operational database is lost and you must restore it from a backup?
+  - Consider using a cluster database with replicated storage to have continuous data redundancy.
+* Test the viability of the backups regularly.
+  - Run frequent test restores to verify the integrity of the backup.
+* Define and periodically execute a full agent disaster recovery plan.
+* Ensure that the backups are maintained in a secure location, and protect both the database and encryption keys for the secure storage.
+
+**NOTE**: *The vast majority of the data in the agent storage database is encrypted and the encryption keys for the database must be appropriately managed. <mark>This includes ensuring that the keys are stored separately from the data</mark>, they are protected from accidental disclosure, and they are accessible when necessary for starting the agent and after a database restore. Techniques using tools like [Hashicorp’s Vault](https://www.hashicorp.com/products/vault) for managing the agent storage keys might be a good approach. Again, none of these requirements are different from any other enterprise database system.*
+
+Regarding the "how much data can you afford to lose" question, remember as you consider that question, that in addition to the ledger objects, agent secure storage holds information about the connections your agent has established (with your private key for each connection) and protocols that are "in-flight."
+
+## Indy ledger writing
+
+While Indy ledgers are pretty easy to write to (there's an API call for that!), there are a couple of added governance related complications that need to be handled in using most production and some test Indy ledgers, the "TAA" and "Endorsers." We’ll go through each of them next.
+
+### The Indy Transaction Author Agreement (TAA)
+
+The Indy Transaction Author Agreement (TAA) is an optional agreement between a party that is writing a transaction to an Indy instance and the operators of that instance. If the ledger is configured to use a TAA, the API call that is made to write to the ledger must include information that amounts to the transaction author (you) saying "I agree to the TAA"—just like the "End User License Agreement" (EULA) that most software and websites require you to acknowledge. In the case of an Indy write transaction, there are three fields that are added to each Indy write transaction that the ledger will check before processing the transaction if the TAA is enabled:
+
+* The time the TAA was accepted.
+* The hash of the current TAA.
+* An enumerated value indicating how the TAA was accepted.
+
+From a legal perspective, your organization must review and accept the TAA before writing to the ledger. That means, getting the TAA from the ledger operator and making sure your organization understands the legal implications of, and abides by, the agreement. The TAA can be retrieved from the ledger (for Sovrin MainNet it’s [here](https://indyscan.io/tx/SOVRIN_MAINNET/config/9364) on indyscan.io) and likely stored in a more readable form on the Indy ledger operator’s site, such as [here](https://docs.google.com/document/d/1wcSESHbqU6OCOG1g1q5TrIkRehJZ38PtjWkFkLxg-Dc/edit) for Sovrin MainNet.
+
+From a technical perspective, an agent writing to the ledger that has an active (non-empty) TAA needs to get the hash of the current TAA from the ledger, and a list of configured values for how to accept the TAA. Once again, that information is stored on the ledger, this time in the `TXN_AUTHOR_AGREEMENT_AML` configuration transaction, such as here for the Sovrin MainNet. "AML" means "Acceptance Mechanism List," and it’s a list of the name/value pairs for how an organization can accept the TAA, plus the hash of the TAA. So, to write to the ledger, an agent must:
+
+* Get the AML transaction from the ledger.
+* Have the (human) controller select a method from the AML to use to accept the TAA.
+* Include the method selected, the hash from the AML data, and the current timestamp in any ledger write transaction.
+
+Fortunately, most Aries frameworks make it easy for you to (technically) accept the TAA on every write. For example, Aries Cloud Agent Python has an Admin API call to read the AML data, and another, `/ledger​/taa​/accept`, that lets you indicate how you accept the TAA from the list of options. After execution, ACA-Py automatically adds TAA data to every write. By adding that call to the controller initialization code, you no longer have to worry about the TAA from a technical perspective.
+
+However, remember that’s only the technical handling. Your organization should definitely do a legal review of the TAA itself and make sure that it is willing to abide by the terms of the agreement before adding that call to the controller. And of course, you must also be certain that what you are writing to the ledger doesn’t break the agreement that you’ve agreed to.
+
+## Lab: Handling the TAA In ACA-Py
+
+In this lab, we’ll activate the TAA on a local instance of the VON-Network, and then run some API commands to retrieve the TAA Agreement AML, and use it to accept the TAA.
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/TAALab.md) to run the lab.
+
+## Knowledge check 8
+
+1. All Indy ledgers have a TAA. True or <mark>False</mark>?
+2. What is the "Community Coordinated Update" mechanism used for? Select all answers that apply.
+  * <mark>To make a breaking change to the protocols agents are using</mark>
+  * To integrate a range of agents
+  * To change versions of different protocols
+  * <mark>For agent interoperability</mark>
+3. The encryption keys associated with an agent’s storage database should be stored with the data. True or <mark>False</mark>?
+4. When using horizontal scaling, there are many instances of the Aries framework and controllers, but only one secure storage database. True or False?
+
+
+
+## Summary chapter 8
+
+In this chapter you learned about the challenges of production, covering a little about mobile and a large amount about enterprise agents. This chapter covered a lot of territory!
+
+You learned about:
+
+* The issue of keeping ledgers and agent storage in sync—and the danger of losing your agent secure storage—not good.
+* The "best practice" pattern for managing ledger objects in production.
+* The current process for writing transactions to a ledger that is fully permissioned.
+* Deploying enterprise agents on scalable platforms such as Kubernetes.
+* How you can create an agent platform, an agency, running hundreds or thousands of agents within a single Aries deployment.
+* Some of the advanced capabilities in Aries Cloud Agent Python that you might (or might not) need as you begin to develop your own applications.
+
+Don’t worry, you won’t need all of these features on day one of your work as an Aries developer. But we did want you to know about some of the more powerful features under the hood, as you get closer to releasing your first product.
