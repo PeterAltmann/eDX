@@ -2065,6 +2065,179 @@ In this lab, we’ll activate the TAA on a local instance of the VON-Network, an
 
 Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/TAALab.md) to run the lab.
 
+## Endorsing transactions
+
+The second governance challenge in writing to a production ledger is having permission to do so. Not just any transaction author can write a transaction to an instance of a ledger, even if they have agreed to the Transaction Author Agreement. While the permission rules are configurable per Indy instance, on the Sovrin ledgers at least, writing requires the participation of a "Transaction Endorser." An endorser is an organization that has submitted and had accepted an application to be an endorser, has (physically/online) signed legal agreements about being an endorser, and has had a DID with the "endorser" role added for them on the ledger. Once an organization is a transaction endorser, they can:
+
+* Write objects on the ledger with their endorser DID.
+* Sign (with the private key from their endorser DID) write object transactions created by authors (non-endorsers) so that the transactions are processed by the ledger instance.
+
+The ability to sign transactions of other authors is an interesting capability because it can be used in several ways.
+
+* An organization with just one issuer wouldn’t use the signing capability, and it would just write any required transactions directly using its endorsed DID.
+* For a large enterprise, like a government or multinational, the enterprise might have one endorser, and all other issuing agents in the organization are "authors" that request the endorser sign their transactions. That keeps both the control and billing for the writes centralized in the organization.
+* An "SSI-as-a-Service" (SSIaaS) company might provide services for other organizations that include signing any write transactions needed for their customers to be verifiable credential issuers. The SSIaaS company would have to pay the ledger operator (for example, the Sovrin Foundation) for the objects written to the ledger, and could charge their clients whatever they want. The Trinsic Studio (that we’ve referenced before) Agent-as-a-Service handles endorsing transactions for their clients.
+
+When transactions are written to the Sovrin ledger (for example), it’s not the author that has to pay for them, it’s the endorser; the organization that has the endorser legal agreement with the Sovrin Foundation. And, while the author must still adhere to the TAA (above), the endorser must ensure the endorser legal agreements are adhered to by both the endorser and the author, if those are different entities.
+
+Let’s take a look at the details of signing a transaction manually in a lab, and then we’ll cover the automation available in Aries frameworks to handle endorser signing.
+
+## Lab: Scripting Indy Production Writes
+
+In this lab, we’ll look at the manual process (using the Indy CLI) for authoring, endorsing and writing transactions to a ledger that is fully permissioned, such as Sovrin MainNet.
+
+Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2/ProductionWrites.md) to run the lab.
+
+## Automating Indy Endorser Transaction Signing
+
+In the first few times our team used Sovrin MainNet, we completed the legal steps to be an endorser and created an endorser DID to write any other ledger objects we needed. That meant that we didn’t need to use the author-endorser signing process. Even when we started using authors, we just used the Indy CLI (manual) process to create, get endorsed, and execute the few transactions we needed for issuing credentials. Who needs automation?
+
+Well...that’s a lot of overhead at best, and unsustainable when you get to use cases requiring verifiable credential revocation. How do we make the process a lot easier for all parties involved? As of mid 2021, the process is becoming automated. Let’s go over what has been done so far, and what’s left to be done.
+
+Work to automate the process started with the definition of an "endorser signing" protocol. Like all Aries protocols, it defined the roles of the participants, the messages and the states of the protocol. It allowed an author (a protocol role) to request a transaction be signed, and an endorser (another role in the protocol) to sign the transaction and either execute it (submit it to an Indy ledger) or pass it back to the author to be submitted to the ledger.
+
+Next up was implementing the protocol, which was done by [AyanWorks](http://www.ayanworks.com/) as a contribution to Aries Cloud Agent Python. The implementation extended the data associated with connections to include the role of a connected agent and specifically, if it is the endorser for this agent. As well, the Admin API was extended to indicate when a "create" operation required an endorser’s signature.
+
+As this course is being updated (mid 2021), two items remain on the roadmap for this capability in Aries Cloud Agent Python.
+
+* While the current ledger write-by-write control of endorser signatures gives us the most flexibility, the vast majority of use cases will be all or nothing—either all the ledger writes have to be signed by an endorser, or none of them do. So, instead of the controller having to ask (or not) on every ledger write, we are changing the implementation to have a single (command line) configuration that controls if an endorser signature is needed or not, who the endorser is, and applying it on all transactions. That way, the controller won’t need to do anything beyond configuring the ACA-Py instance—the framework will take care of everything!
+* On the endorser agent side, we need a controller to accept endorser requests and to decide if they are to be processed or not. Such a controller could do that all with business logic, such as a fixed "allow list" of agents that can have their transactions signed, or perhaps a UI that allows a person to decide to sign (or not) an endorsement request.
+
+As this capability is evolving in Aries Cloud Agent Python and may be implemented differently in other Aries frameworks, be sure to look at the framework documentation to get the latest.
+
+## Ongoing Ledger Writes: Handing Revocations
+
+Before we complete this section, we want to cover revocation from an issuer perspective, and particularly Indy AnonCreds revocation. Issuer revocation handling in AnonCreds is pretty tricky, with several extra challenges. The good news (at least if you are using Aries Cloud Agent Python) is that the framework takes care of most of those extra challenges, leaving you with just some extra configuration.
+
+We’re not going to cover much on how Indy AnonCreds works, but rather provide a little guidance on what extra things you, as an Aries developer, need to do when including support for revocation, and what support ACA-Py (and perhaps other Aries frameworks) provides for handling revocation. If you are interested in how revocation works, please checkout this [article](https://github.com/hyperledger/indy-hipe/tree/master/text/0011-cred-revocation) that is part of the Indy SDK repository.
+
+The first complication with AnonCreds revocation is the need for the issuer to publish the (infamous) tails files. A tails file must be published by the credential issuer such that every credential holder (such as a mobile wallet app) can retrieve it. In theory, it can be posted anywhere (e.g., on a file server), but for it to be read on a mobile wallet app, the file must be retrieved from an SSL certificate protected (https:) server (e.g., it must be encrypted). This is enforced by iOS and Android. To make it (relatively) easy to get started, the BC Gov team has implemented a ["Tails Server" open source repository](https://github.com/bcgov/indy-tails-server) that you can deploy yourself, and they have deployed a public instance of it at https://tails.vonx.io/. The 404 you get from following that link is expected so that you can "just use it."
+
+A second complication is that AnonCreds revocation registries are relatively small, limiting the number of credentials you can issue per registry. When you run out, you have to create a new registry. That’s pretty painful! Fortunately, Aries Cloud Agent Python takes care of that complexity around revocation registries for you. When the controller indicates that revocation will be used when creating a credential definition, ACA-Py immediately creates two revocation registries, and starts using one for issuing credentials. When that registry runs out of credentials, ACA-Py switches to use the other one, and automatically creates another registry. This means you, as a controller writer, don’t have to worry about revocation registries at all. ACA-Py makes sure there is always an active and ready-to-go registry on hand!
+
+From an issuer controller perspective, here’s what you have to do when using AnonCreds revocation with ACA-Py:
+
+* Deploy your own, or use a public tails server. When starting ACA-Py, pass in the URL of the tails server as a command line option. ACA-Py will take care of publishing the tails file for each revocation registry created and making sure that the location of the tails file is published as required to the Indy ledger you are using.
+* When creating a credential definition, indicate that revocation is to be supported and the size (number of credentials) in each revocation registry. The size will be a tradeoff between the number of registries needed (fewer is better) and the tails file size (smaller is better). This is why tails files are infamous...
+* <mark>When issuing a credential, save the ID of the credential (associating it with the holder) such that it can be used later for revoking the credential, if necessary.</mark>
+* <mark>When required, revoke credentials using the saved ID for the credential. This may (or may not) trigger the publishing of the revocation to the Indy ledger.</mark>
+* Trigger the publishing of revoked credentials. That can be done in conjunction with revoking a credential, or periodically, to publish all of the revoked credentials since the last publication.
+
+By the way, all of this complication is on the shoulders of the issuers. A holder’s job is much easier. As long as the path to the tails file is accessible, <mark>all of the revocation handling is within the Indy AnonCreds code, so there is not a lot that a holder agent’s controller needs to do. Oh wait, maybe one thing. After creating a presentation that involves a revocable credential, the controller might want to check if the credential has been revoked.</mark> If it has, perhaps the presentation shouldn’t be sent to the verifier...
+
+A last issuer concern to touch on is how often you should publish revocations to the ledger? On public Indy ledgers such as Sovrin’s MainNet there is a cost associated with writing a revocation entry (as they are called on Indy) to the ledger. It’s not much, $0.10US right now, but it’s something to consider. At the same time, your verifiers may need to know as quickly as possible if a credential has been revoked. What’s the best approach? Well, it depends...
+
+Revocations could be written as needed (whenever they occur), or written periodically. For example, consider a government that issues driver’s licenses as verifiable credentials that needs to revoke existing credentials when driver’s license data changes—address, class of license, the right to drive, etc. In that use case, it’s likely acceptable to write an update to the revocation registry daily that includes all the revocations that have occurred since the last update. For a large population, the number of daily revocations might number in the thousands. Such an issuer might also define a class of "high importance" revocations (for example, loss of right to drive) for which the issuer wants to support immediate revocation. On the other hand, issuers that rarely revoke credentials (for example, monthly) could work either way, revoking credentials as they happen, or batching them into periodic writes to the ledger.
+
+The most important thing you need to take from this section is that if you are using the Indy ledger, there will likely be legal and technical requirements around writing data to the ledger. That means that you have to investigate the governance around the ledger you are using to understand that governance, and the legal and technical requirements you will need to address. Once you know those requirements, look at the Aries framework you are using and understand the features of the framework that allow you to manage your Indy ledger writes.
+
+We also covered revocation with Indy AnonCreds and the complications it brings—and the support that Aries frameworks provide to hide those complications from controller software. That makes your job a lot easier!
+
+Currently, writing to ledgers (or just publishing DIDs) from Aries agents is mostly limited to Indy. As support in Aries expands to include writing to other types of ledgers beyond Indy, these types of governance issues will need to be addressed, leading to additional technical requirements on Aries agents.
+
+## Horizontally Scaling Enterprise Aries Agents
+
+For enterprise agents, an important production issue to consider is horizontal scaling—the ability to increase the capacity of an enterprise agent by adding more agent instances. While your use cases may start out small, it's a good idea to think about how you will scale up your capacity as demand grows for the services offered by your agent.
+
+This section draws mainly on the experience of the Verifiable Organizations Network (VON) team at the Government of British Columbia. We won’t go into the business case behind OrgBook BC and its code base (you can read about it [here](https://vonx.io/), if you are interested), we’ll just look at its verifiable credential processing requirements.
+
+The VON team has implemented two generations of agents in its OrgBook BC issuer and community holder. For the OrgBook initialization use case, an enterprise issuer must issue millions of credentials to a single enterprise holder as quickly as possible. That sheer volume of credential issue events requires the scaling of the solution to use as much processing power as is available. The architecture of the solution is pictured below.
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/73099ae7e59be9f966693668084bb8de/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-31.png' width = 350>
+<br>
+<br>
+The following is a summary of the architecture:
+
+* ACA-Py instances are the orange boxes—issuer and holder agent frameworks.
+* The controllers are in green, each controlling one of the ACA-Py instances.
+* The databases labelled "Secure Storage" are agent secure storage, holding the keys, ledger data, connections, credentials and protocol state objects.
+* The issuer controller monitors the source system for "events" that trigger credential updates—issuing or re-issuing credentials. It invokes the issuer ACA-Py instance to issue the verifiable credentials to the Credential Registries agent using the "Aries Issue Credential V2" protocol ([RFC 0453](https://github.com/hyperledger/aries-rfcs/tree/main/features/0453-issue-credential-v2)). The controller keeps track of the events processed and credentials issued in the Event Tracker database.
+* The holder ACA-Py agent framework instance receives issued credentials, stores them in its agent secure storage and notifies its controller about the credentials.
+* The holder controller extracts out the claims from the credentials and stores some of the claims in the search database.
+* HTTP is used for transport between all of the controllers and ACA-Py instances.
+* All of the databases (both Secure Storage and the Search Database) are all PostgreSQL instances.
+
+The design (hopefully) looks pretty straightforward, and the operation is pretty simple: use Aries protocols to connect two agents during initialization, and then issue credentials from the issuer to the holder. The challenge is the volume of credentials to be issued. For launching OrgBook BC, our requirement was to issue 2.5 million credentials as quickly as possible, ideally within hours, and then continue to issue credentials at a steady pace of thousands per week. Thus, we want to scale up for the initial load, using every bit of computing resource we can find, and then scale down to a pretty low steady state.
+
+The OrgBook BC use case is somewhat different than might be seen for any high volume issuer. In a more typical case, instead of one holder, the issuer would be connecting with tens to hundreds to thousands of holders simultaneously, issuing credentials to each. Regardless, the need for horizontal scaling to adapt to loads as they happen is needed in each case.
+
+For this scenario, we want to be able to run the agent on a platform that supports (ideally automated) scaling, such as [Kubernetes](https://kubernetes.io/). As the load on the agent increases (more requests), more processes (containers) are added so that we have more available issuing capacity. When requests drop, some of the containers stop and capacity decreases. To enable auto-scaling, [cloud native approaches](https://www.cncf.io/) must be applied. In the case of Aries, that means the controllers and agent framework components must be stateless—they must operate without holding state in memory. The multiple agent (framework and controller) instances operate as a single logical agent, with the combined capability of all of the instances looking to the outside world as a single agent.
+
+<mark>All of the agent framework (ACA-Py in this case) instances persist data to a single logical secure storage instance</mark>; for example, a single PostgreSQL database. Ideally, that database would be implemented as a cluster, so it too supports high availability and scalability. Likewise, the scalable controllers likely have their own persistence, separate from the Aries secure storage.
+
+As we have seen in this course, both Aries controllers and agent frameworks (such as ACA-Py) operate an event loop (waiting for an event, processing it, and responding to the event), just like any web service. To make Aries components stateless, event state must not be held in memory, but rather persisted to shared storage when completing the processing of an event. With that, any number of instances of the agent components can wait on events, retrieve the state information associated with the event and process it. Since it is likely in enterprise scenarios that all the transports to, from and within the agents are HTTP, load balancers can be run in front of the components to distribute the load across all available instances.
+
+Agent frameworks such as ACA-Py have been built with this stateless requirement in mind. As you build your controller, you should also try to meet this requirement. Define a clean controller event loop that includes both retrieving state from shared storage at the start of processing an event and persisting state to that same shared storage at the end of processing. Do not maintain state outside of event processing.
+
+## Agent Instance Initialization
+
+With horizontal scaling, you will have instances of the agent starting and stopping regularly, and initializing those agents must be managed properly, particularly as it relates to objects written to the ledger. A naive approach to starting every instance of an agent might be to follow the pattern in the image below.
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/debd3c1e61d62e56652d53d150f3bc77/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-22.png' width = 300>
+
+While that will work in most cases, since there can be multiple agent framework instances running concurrently, what happens if multiple instances start up in parallel, each sees in step 2 that some ledger objects don’t exist, and each tries to create them?
+
+The maintainers of ACA-Py have attempted to address this and related initialization concurrency issues by having agents run in one of two modes: provisioning and operational (called "start"). In provisioning mode, the agent starts up, checks if all of the resources that an agent needs have already been provisioned and if not, it creates them. This includes creating and initializing secure storage, creating any ledger objects required (for issuers), and writing them to the ledger. Once that is done, the agent exits, its work done.
+
+In ongoing operation, the operational mode is used. The agent starts up checks if all of the resources that an agent needs have already been provisioned and if not, exits immediately with an error. However, if the provisioning has been done, off it goes to do its work.
+
+We recommend that you stick with this pattern as you deploy your agents. It allows you to limit the use of higher level permissions (e.g., to create the secure storage database, and write to the ledger) to provisioning mode and running agents with less authority in operational mode. Note that if you are using revocation, your operational agents likely will need the ability to write to the ledger, as new revocation registries will need to be created from time to time.
+
+We don’t have a lab related to horizontal scaling, but if you think you will need to know more about this topic, we recommend that you keep handy this link to the [BC Gov’s OpenShift Deployment Configurations repository](https://github.com/bcgov/orgbook-configurations) to use when you need it. OpenShift is Red Hat’s distribution of Kubernetes, and the repository will give you some guidance as you deploy agents to a Kubernetes platform.
+
+## Multi-Tenant Aries Agency
+
+We’ve covered how to deploy a single agent (one framework with one controller) a number of times in this course—Faber the issuer and verifier, Alice the holder, Acme the verifier. That’s all good, but what if you want to operate an agent service with thousands (or millions!) of agents? For example, you want to empower many small businesses to become verifiable credential issuers. Or perhaps you want to create "custodial wallets" for lots of holders, wallets that aren’t stored on a mobile device, but that are accessed through a web app. As we’ve discussed earlier in the course, it’s not an ideal approach, but it may be the "best possible" approach in some cases.
+
+In the early days of ACA-Py the answer to that need wasn’t great: "create a new deployment of a full agent using a different URL and use different ports." What a pain! Fortunately, a better answer was possible, and [SICPA](https://www.sicpa.com/) from Switzerland contributed the code and documentation in ACA-Py to provide multi-tenant mode.
+
+In multi-tenant mode, a single instance of ACA-Py is deployed, usually using the horizontal scaling techniques talked about in the previous section. When the service starts, a base instance of secure storage is created with limited agent capabilities, but with the added administrative power to be able to dynamically create new "tenants," a new agent within the agency. A new tenant is really just three things:
+
+* A JWT authentication token given to the controller for the new tenant agent.
+* A new unit of secure storage ("sub-wallet"), a new database for the exclusive use of the new tenant.
+  - This means that within the database server (e.g., Postgres) the `CREATE DATABASE` command is executed, and new tables are created within that new logical database.
+* An entry in the base secure storage ("base wallet") with information about the new agent.
+
+**NOTE:** *In the ACA-Py multi-tenant documentation, the term "wallet" is used for what we call secure storage in this course.*
+
+Since the ACA-Py framework is stateless, those three elements are sufficient to make an entirely new agent framework within a single instance of ACA-Py. From outside of the agency, tenants look exactly like any other Aries agent. Likewise, the controller’s administrative API for the tenant framework is exactly the same as for a standalone agent framework, allowing the execution of all of the same Aries protocols. Since the overhead for each tenant is minimal, the solution can scale to the limits of the underlying platform (compute and storage), supporting as many tenants as needed.
+
+The base secure storage plays an important role in multi-tenancy, identifying for each request the tenant to which it applies and providing access to the tenant’s storage. In most cases, the base storage holds the decryption key for the tenant storage, although the multi-tenant capability can be configured such that the decryption key must be passed in and thus never stored in the agency. The role of the base storage can be seen from the drawing below, which shows how messages from external agents are received by the base storage ("wallet" in the drawing) and, based on the intended recipient, passed on to the right tenant.
+
+<img src = 'https://courses.edx.org/assets/courseware/v1/f61929368a596cc4cd6020de67deb5f2/asset-v1:LinuxFoundationX+LFS173x+3T2021+type@asset+block/LFS173X_CourseGraphics-17.png' width = 700>
+
+Requests from the controller must include the issued JWT for the tenant attached, allowing the ACA-Py instance to find and access the secure storage for the tenant to process the request. Webhooks from the tenants can be configured per tenant, allowing each to go to a different URL.
+
+That’s all we’re going to cover about multi-tenant mode—a little taste just to let you know the feature is available should you need it for your use case. It’s a pretty advanced feature, and many Aries developers won’t need it—until they do! Want more information about it right now? Check out this [document](https://github.com/hyperledger/aries-cloudagent-python/blob/main/Multitenancy.md) in the ACA-Py repository.
+
+## Advanced Capabilities
+
+Skip to main content
+In this final section of the chapter we’ll list a couple of pretty advanced deployment use cases. We’re just going to skim these topics so that you know about them in case you need them—most will not. But for some use cases, these are crucial features. Note that these are all capabilities that are part of Aries Cloud Agent Python. If you are using a different Aries framework, you’ll need to check if/how these capabilities are supported.
+
+### Multiple controllers
+
+While multi-tenant mode allows you to implement an agency where multiple agents can happily coexist, there are also occasions where we have discovered that being limited to a single controller per agent instance is not enough. As such, as of ACA-Py Release 0.6.0, a new capability has been added to support that requirement. Controllers are notified of events via webhooks, with the controller registering with the ACA-Py instance the URL to which webhooks are to be sent. The original single webhook per agent has been extended to support registering multiple webhooks. Each webhook URL receives notifications from ACA-Py as they occur. Of course, if multiple controllers are receiving the webhook notifications about events, they need to coordinate on the handling. For example, notifications might go to a "typical" controller to process, and a second controller that just monitors traffic and publishing metrics. The former responds to the events, while the latter just quietly listens.
+
+### Persistent Queues
+
+While ACA-Py has (mostly) been designed to support horizontal scaling based on a platform such as Kubernetes, there remains (as of mid-2021) a weakness in the implementation—some in-memory queues. As messages, webhooks and administrative requests are initially received, they are put onto a queue for processing. If an instance of ACA-Py is suddenly terminated for some reason (such as a Kubernetes node on which it is running crashes), the items in the queue will be lost.
+
+An implementation of an external queue based on Redis has been implemented, so we’re part way there, but as of mid-2021, the supporting code to make it easy to deploy and use has not yet been added. Perhaps you might want to work on that!
+
+### Plugins
+
+While ACA-Py is pretty complete for general purpose, Trust over IP applications, there may be capabilities (such as protocols) that will need to be added for particular use cases. In some cases, you may have to take the long road to get those implemented: propose a protocol in an RFC, get it accepted in the community, get the RFC added to an AIP, get the AIP accepted, add the protocol to the Aries frameworks, access the protocol in your controllers and deploy your application.
+
+However, in some cases where you want to use the capability in a closed ecosystem, you can add the capability to your deployments of ACA-Py by adding a plugin. A plugin is an external Python module that is loaded at run time by ACA-Py and available for use by your instance. The plugin might be a new protocol, including new messages, message handlers, a state object and administrative endpoints. A plugin might even add its own startup parameters to ACA-Py.
+
+If you need to add something to your version of ACA-Py, here are a couple of examples of plugins that you can look at to get started:
+
+* The Aries Toolbox that we looked at in Chapter 6 implements a couple of ACA-Py plugins that are defined in the [Aries Toolbox Plugins](https://github.com/hyperledger/aries-acapy-plugin-toolbox) repository.
+* The BC Gov OrgBook includes a special protocol for organizations to register their use of ACA-Py that is implemented as a plugin. The code for that plugin is [here](https://github.com/bcgov/aries-vcr/tree/master/server/message_families/issuer_registration).
+
+And with that, we’ll end our brief journey into Aries framework advanced capabilities. We’ll wrap up this chapter and move onto the last chapter in the course, which is all about what you can do with your newfound Aries developer chops.
+
 ## Knowledge check 8
 
 1. All Indy ledgers have a TAA. True or <mark>False</mark>?
@@ -2074,7 +2247,7 @@ Click [here](https://github.com/cloudcompass/ToIPLabs/blob/master/docs/LFS173xV2
   * To change versions of different protocols
   * <mark>For agent interoperability</mark>
 3. The encryption keys associated with an agent’s storage database should be stored with the data. True or <mark>False</mark>?
-4. When using horizontal scaling, there are many instances of the Aries framework and controllers, but only one secure storage database. True or False?
+4. When using horizontal scaling, there are many instances of the Aries framework and controllers, but only one secure storage database. <mark>True</mark> or False?
 
 
 
@@ -2092,3 +2265,165 @@ You learned about:
 * Some of the advanced capabilities in Aries Cloud Agent Python that you might (or might not) need as you begin to develop your own applications.
 
 Don’t worry, you won’t need all of these features on day one of your work as an Aries developer. But we did want you to know about some of the more powerful features under the hood, as you get closer to releasing your first product.
+
+# Chapter 9
+
+We’ve covered the core of the materials. Congratulations—you’ve made it! We hope you are well on your way to becoming a Hyperledger Aries developer.
+
+With the heavy content and labs complete, this chapter provides a look forward at what might be next on your journey. We have looked at agents and controllers, agents and protocols and agents and frameworks. We’ve looked at testing, message routing, mobile agents and moving things into production. Now it’s time to consider what you want to do with Aries.
+
+In this chapter, you will learn about:
+
+* Where your development efforts might fit best and how they apply to the technical layers of the Trust over IP (ToIP) stack.
+* What Aries projects are active and where you can contribute.
+* Aries Working Group Calls and other ways to get involved.
+
+## Going forward
+
+Going forward, consider what you want to work on next:
+
+* Are you looking to build an application on top of Aries?
+* Do you want to add a new capability to Aries?
+* Do you want to contribute to the existing Aries projects?
+* Do you want to contribute to the projects that are under Aries, such as Indy and Ursa?
+
+In the following, we go through the technical layers of the Trust over IP (ToIP) stack from top to bottom and relate that to what you could work on next. As you will recall, the Trust over IP stack was introduced in the prerequisite course, "Introduction to Hyperledger Sovereign Identity Blockchain Solutions: Indy, Aries and Ursa" ([LFS172x](https://www.edx.org/course/identity-in-hyperledger-aries-indy-and-ursa)) and is represented in this image from the [Trust over IP Foundation](https://trustoverip.org/).
+
+Our expectation is that the majority of developers will work on ToIP applications—building Aries controllers at Layer 4, that run on top of the Aries frameworks that occupy Layers 2 and 3 of the ToIP technical stack. More developers working at Layer 4 implies there will be fewer contributing developers in the technologies at or below Aries frameworks. This is not to dissuade anyone from contributing at the lower levels, but rather to say, if you are not going to contribute at the lower levels, you don't need to know everything about those layers. It's much like web development—you don't need to know TCP/IP to build web apps.
+
+## Building decentralized identity / Trust over IP applications
+
+<mark>If you just want to build enterprise applications on top of the decentralized identity-related Hyperledger projects</mark>, you will be doing exactly what we’ve discussed in this course, building cloud-based controller apps using any language you want, based on an agent framework such as aries-cloudagent-python ([ACA-Py](https://github.com/hyperledger/aries-cloudagent-python)). You can start by using the examples we have provided in the labs in this course, from scratch, or look in the community for starter kits that are beginning to emerge (such as this [Verifiable Credential Identity Starter Kit](https://github.com/bcgov/issuer-kit) from the BC Government). As we have seen throughout the course, developing enterprise issuer/verifier Aries agents is much like building any web service, receiving events, processing them and responding.
+
+## Enterprise Agent Open Source Projects
+
+While most folks are building ToIP applications for their own needs, here is an enterprise agent open source project that some might find intriguing.
+
+Incubating within the [Hyperledger Labs](https://labs.hyperledger.org/) organization is the interesting [Business Partner Agent (BPA) open-source project](https://github.com/hyperledger-labs/business-partner-agent) that was started by Bosch. A BPA is a Hyperledger Aries agent for an organization that allows the organization to:
+
+* Receive verifiable credentials issued to it.
+* Share self-asserted data and data from the verifiable credentials it holds by responding to presentation requests.
+* Request presentations from partners and other organizations.
+* Issue verifiable credentials.
+
+It’s kind of like the organizational equivalent of a person’s mobile wallet, but intended for business-to-business use cases, ideal for things such as controlled sharing of supply chain information to prove the provenance of products, and the organizations that produced those products.
+
+In addition to its Aries DIDComm interface to interact with other agents, a BPA exposes a web-based interface for authorized users within the organization to see and respond to requests coming into their BPA, and to initiate requests to other BPAs (or other Hyperledger Aries) agents. Incoming requests are handled by configurable workflows that might be as simple as an automatic response, to as complex as a multi-person, multi-level approval business process. And of course, BPA users present data from verifiable credentials they hold for BPA authentication and authorization.
+
+Just as almost all companies have a web presence today, we can see a future where all companies have their own public BPA for exchanging verifiable information to enable trusted business transactions. It’s a big project with a ton of potential!
+
+## Mobile Hyperledger Aries Wallets
+
+As we covered in Chapter 7, if you want to build and deploy a mobile agent, there are open source options available to start with, such as the [Aries MAX](https://github.com/hyperledger/aries-mobile-agent-xamarin) and [Aries Bifold](https://github.com/hyperledger/aries-mobile-agent-react-native) projects. If you are going to build off of the source bases, we strongly recommend you do most of the work within those projects, collaborating to everyone’s benefit. In the long run, we hope that there are a number of Aries mobile agents in the app stores that offer users fantastic mobile experiences. In the short run, we expect that some organizations will want to issue companion mobile agents that work closely with their enterprise web services. Organizations may even extend their existing mobile applications to include Aries agent/ToIP capabilities. Credit Union tech company [Bonifii](https://bonifii.com/) has taken this path with its [MemberPass](https://www.memberpass.com/members/) capability in its mobile app that makes verifying the user on support calls way more secure.
+
+As a developer building applications that use/embed Aries frameworks, we recommend you join the regular [Aries Working Group calls](https://wiki.hyperledger.org/display/ARIES/Aries+Working+Group) (see the last section of this chapter) and Aries channels on the [Hyperledger RocketChat](https://chat.hyperledger.org/home). The maintainers of the Aries repositories often hold regular meetings about their project. For example, ACA-Py holds biweekly [ACA-Pug](https://wiki.hyperledger.org/pages/viewpage.action?pageId=24780322) (Users Group) meetings to bring together the ACA-Py developers and teams building applications on ACA-Py. Listed at the end of this chapter are the links for all of the Aries project chat channels and meeting pages.
+
+Looking for Hyperledger Aries product ideas? The last chapter of the prerequisite course ([LFS172x](https://www.edx.org/course/identity-in-hyperledger-aries-indy-and-ursa)) provided a list of areas where the verifiable credentials model could be applied, ranging from identity to climate change. Jump back to that chapter to remind yourself of just some of the many possibilities with Aries technology. But realize that the possible applications are truly endless. We hear of new ideas everyday!
+
+## Learning the protocols
+
+As we’ve talked about a lot in the course, the [aries-rfcs](https://github.com/hyperledger/aries-rfcs) repo is an important resource. As you get started in building applications, we recommend you carefully review the Aries Interop Profiles (1.0 and 2.0) in [RFC 0302](https://github.com/hyperledger/aries-rfcs/tree/main/concepts/0302-aries-interop-profile), where you will find links to the set of RFCs/protocols that many of the existing agents and agent frameworks support. Sticking to these protocols will ensure that your applications will interact with other agent-based applications in the ecosystem. As well, you should look at the state of the agents and agent frameworks that are available, and choose the right one for your application.
+
+**NOTE**: *If building apps is what you want to do, you don't need to do a deep dive into the Aries agent framework (beyond the API they expose), the indy-sdk/indy-vdr, or the indy-node ledger repositories. You need to know the concepts implemented by those projects, but it's not a requirement to know those code bases intimately.*
+
+If we did our job right in building this course, you should now have all the tools you need to get started!
+
+## Contributing to the Aries projects
+
+As you build controllers on top of the Aries projects, you may find limitations in what is available today in Aries frameworks. When that happens the community would love it if you made a contribution. A start would be just to raise the topic on RocketChat or create an issue in GitHub that clearly outlines what you are trying to do, and the limitations you have hit. From there, the community will be more than willing to help you move forward. Perhaps you haven’t yet discovered the capability already exists, or perhaps it’s a deficiency that needs to be addressed. Either way, the community will help you find a way to make progress.
+
+The following are some ideas for some ways you can contribute to Aries projects and the other open source projects on which they are built.
+
+### Extending open source mobile apps
+
+We’ve given two open source mobile "getting started" capabilities in this course. The developers working on those offerings would love to have other contributors with mobile expertise to expand those offerings. Ultimately, all published (in the app stores) mobile agents are by definition proprietary, but there is a lot of shared work needed to make it easier for organizations to create great mobile self-sovereign identity experiences.
+
+### Mobile agent backup and restore
+
+As we discussed in both this course and its prerequisite, mobile agent backup and restore is a crucial capability that must be both secure and easy for users. Consider designing and building a backup and restore capability for mobile agents that both automates the backup operation (that’s pretty easy) and provides a user-friendly, secure restore operation (that’s a bit more challenging!).
+
+### Contributing to the Aries Agent Test Harness
+
+Demonstrating interoperability is a huge part of building a sustainable ecosystem. The Hyperledger Aries community wants to empower creators of Aries agents to build their applications with confidence that they will work with all of the other agents in the community. As we talked about in Chapter 6, the Aries Agent Test Harness is a major piece of the interoperability puzzle, enabling continuous, automated testing of Aries agent frameworks and agents. Here are some of the ways that you can contribute to the [Aries Agent Test Harness](https://github.com/hyperledger/aries-agent-test-harness) open source project.
+
+* Add tests that expand the coverage of Aries Interop Profiles, especially AIP 2.0 as its use expands.
+* Develop backchannels to enable testing of specific, important Aries implementations (such as yours!).
+  - In particular, there is not currently a way to do fully automated testing of mobile wallets. Do you have a background in mobile app testing? Jump in— please!!
+* Monitor the test runs and take ownership of failing tests to at least determine the faulty component, and ideally, drive a fix to it. The faulty component could be in a number of places and it’s a challenge to figure out where the problem might be. Is it:
+  - The RFC from which the test was defined?
+  - The test itself?
+  - One of the backchannels operating a component-under-test?
+  - The functionality of a component-under-test?
+
+### User experience
+
+The focus of the Aries (and Indy and Ursa) communities to this point has definitely been on the underlying technology. The majority of the (mid 2021) community is technical and the focus has been more on getting things working in a secure manner. However, as products based on the technology begin to move into the mainstream, there is a need to focus on user experience. How can we provide the benefits of this new technology in ways that are easy for the majority of the population? We’ve seen enough examples in the community to think that this is possible, but ease-of-use needs to be at the core, and as such, we need more great designers to join the community to make that happen. Projects such as the mobile agents and Business Partner Agent on the enterprise side are great places to contribute.
+
+### Driving RFCs from proposed to accepted
+
+As you begin to build your applications and discover features you wish you had, ask in the community. You may find that an existing RFC covers your needs. Is your idea new and you need other agents to support it? Raise it in the community and if appropriate, contribute an RFC and drive it with an implementation. In reviewing and contributing RFCs, please make sure you look at the main [README](https://github.com/hyperledger/aries-rfcs/blob/main/README.md) for the repo, covering the RFC lifecycle, and the [contribution](https://github.com/hyperledger/aries-rfcs/blob/main/contributing.md) guidance.
+
+### Contributing to the Aries "Shared Components"
+
+While AIP 1.0 was largely focused on the use of Indy ledgers and the Indy AnonCreds verifiable credential format, AIP 2.0 (May 2021) provides a more agnostic approach to the location of DIDs and the format of the verifiable credentials and presentations. This has meant a transition from the use of the indy-sdk as core to Aries agents to some components that are general in focus. Those new components have collectively become known in the community as the "Aries shared components" and are implemented in Rust.
+
+<mark>The most important of the shared components is Aries Askar, a secure storage implementation for an Aries agent. It replaces the indy-wallet code within the indy-sdk, expanding its capabilities beyond Indy specific handling to include additional uses, enabling easily adding new cryptographic signatures and primitives, including support for the keys used for the BBS+ verifiable credentials format.</mark> The other current shared components are new implementations of Indy-specific features, including interacting with Indy ledgers and interacting with Indy AnonCred verifiable credentials.
+
+The ACA-Py code base that we’ve used in many of the labs in the course has recently (mid 2021) added the Aries shared components as a runtime option, and as confidence in the code base grows, will likely deprecate the indy-sdk in favor of the new components. As well, those components are good options for other Aries frameworks as they add support for the new capabilities in AIP 2.0. There are a number of opportunities for developers to contribute to either the shared components themselves, and to their use within Aries frameworks.
+
+### Evolving Support for JSON-LD BBS+ Verifiable Credentials
+
+The 2021 addition of support for W3C standard verifiable credentials has been important to Aries, opening up the possibility of exchanging verifiable credentials and presentations beyond the Aries ecosystem. However, the transition from Indy AnonCreds to BBS+ format verifiable credentials has meant a loss of capability, as we’ve discussed in this course. In the initial BBS+ signatures implementation, there is a lack of support for ZKP holder identifiers, and for a ZKP revocation scheme. Those are key features and work is ongoing in those areas. If you have the skills and experience to contribute in those areas, you are most welcome to help out.
+
+### Improving indy-node
+
+If you are interested in getting into the public ledger part of Indy, particularly if you are going to be a Sovrin Steward, you should take a deep look into [indy-node](https://github.com/hyperledger/indy-node). Like the indy-sdk, indy-node is robust, of high quality and is well thought out. As the network grows, use cases change and new cryptographic primitives move into the mainstream, and thus, indy-node capabilities will need to evolve. Indy-node is coded in Python.
+
+The biggest issues with indy-node in mid 2021 is the need to be able to easily find and access data on multiple Indy instances, and adding full support for the W3C DID 1.0 specification.
+
+Currently in Indy, the "did:sov" DID method does not define a way to say on which network a DID is to be found. That’s been annoying to this point as we’ve worked on promoting applications from, for example, Sovrin’s StagingNet to MainNet. This gets untenable as additional production ledgers come online, and verifiable credentials rooted in different ledgers are issued into a single Aries wallet. The community has defined how to add the network on which the DID resides into the DID Identifier, but the functionality is not yet part of Indy Node, indy-sdk or indy-vdr.
+
+As indy-node pre-dates the 1.0 DID specification, it’s not surprising that it does not fully support the spec. Most notably, Aries agents writing DIDs to Indy cannot yet add what they might want into the DIDDoc of the DID. A design has been put forth for how to make that possible, but to date (mid 2021), that work has not been done.
+
+Indy Node is a great place to contribute to the community!
+
+### Working in Cryptography
+
+Finally, at the deepest level, and core to all of the projects is the cryptography in [Hyperledger Ursa](https://github.com/hyperledger/ursa). If you are a cryptographer, that's where you want to be—and we want you there!
+
+### Howto get involved
+
+We’ve covered most of the ways to get involved in the content presented in this course, so the following is just a list of those resources with links:
+
+* Hyperledger [Aries project](https://www.hyperledger.org/projects/aries) page
+* The [Aries Working Group Wiki, and meetings schedule](https://wiki.hyperledger.org/display/ARIES/Aries+Working+Group)
+* [Hyperledger RocketChat](https://chat.hyperledger.org/home) and the main [Aries channel](https://chat.hyperledger.org/channel/aries)
+* [Aries Cloud Agent - Python User Group](https://wiki.hyperledger.org/pages/viewpage.action?pageId=24780322), [meetings schedule](https://wiki.hyperledger.org/display/ARIES/ACA-Pug+Meetings), and [RocketChat channel](https://chat.hyperledger.org/channel/aries-cloudagent-python)
+* Aries Framework Go [Wiki](https://wiki.hyperledger.org/display/ARIES/aries-framework-go), [meetings schedule](https://wiki.hyperledger.org/display/ARIES/Framework+Go+Meetings) and [RocketChat channel](https://chat.hyperledger.org/channel/aries-go)
+* Aries Framework JavaScript, [Wiki](https://wiki.hyperledger.org/display/ARIES/Aries+Framework+JavaScript), [meetings schedule](https://wiki.hyperledger.org/display/ARIES/Framework+JS+Meetings) and [RocketChat channel](https://chat.hyperledger.org/channel/aries-javascript)
+* Aries Framework Bifold, [Wiki](https://wiki.hyperledger.org/display/ARIES/Aries+Bifold+User+Group), [meetings schedule](https://wiki.hyperledger.org/display/ARIES/Aries+Bifold+User+Group+Meetings) and [RocketChat channel](https://chat.hyperledger.org/channel/aries-bifold)
+
+Starting from those links, you can learn anything more you need about becoming a Hyperledger Aries developer!
+
+## Knowledge check chapter 9
+
+1. If you just want to build enterprise applications on top of the decentralized identity-related Hyperledger projects, a good place to begin is the Verifiable Credential Identity Starter Kit from the BC Government. <mark>True</mark> or False?
+2. When contributing to an RFC, you should:
+  * Carefully review the README for the applicable RFC repo
+  * Understand the lifecycle of the RFC
+  * Fork the repo
+  * <mark>All of the above</mark>
+3. You are a cryptographer, so you should work on the indy-sdk. True or <mark>False</mark>?
+4. As an Aries agent developer, what important resources are available to you?
+  * The aries-rfcs repo
+  * Aries Working Group weekly calls
+  * Hyperledger Chat
+  * The Aries Interop Profile
+  * ACA-Pug Meetings
+  * <mark>All of the above</mark>
+
+## Chapter summary
+
+That’s a wrap! Thank you for taking the course. We hope that you have acquired a sound understanding of Aries agents and are ready to jump in, contributing to this new and exciting technology.
+
+# Final exam
