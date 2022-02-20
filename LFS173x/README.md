@@ -2427,3 +2427,137 @@ Starting from those links, you can learn anything more you need about becoming a
 That’s a wrap! Thank you for taking the course. We hope that you have acquired a sound understanding of Aries agents and are ready to jump in, contributing to this new and exciting technology.
 
 # Final exam
+
+1. What does the `~` symbol mean in the context of an Aries message?
+  * The item is a <mark>decorator</mark>
+  * Nothing special
+  * It is a protocol
+  * It is a data element containing localization information
+2. ________ includes a shared cryptographic wallet for blockchain clients as well as a communications protocol for allowing off-ledger interaction between those clients.
+  * Indy
+  * <mark>Aries</mark> (cf. https://wiki.hyperledger.org/display/LMDWG/ARIES)
+  * Ursa
+  * A verifiable credential
+3. If you want to build enterprise applications on top of the decentralized identity-related Hyperledger projects, you should start by digging into cryptography and distributed ledgers. True or <mark>False</mark>? (you should build Aries controllers and deploy the code with an agent framework)
+4. What are some of the challenges with building Aries mobile agents? Select all answers that apply.
+  * Using notifications for receiving encrypted Aries messages
+  * <mark>Dealing with app store release processes</mark>
+  * <mark>Getting users to upgrade</mark>
+  * <mark>Supporting deprecated features in older releases</mark>
+5. Which Aries framework is not suitable for use for mobile development?
+  * Aries Framework JavaScript
+  * Aries Framework .NET
+  * <mark>Aries Cloud Agent Python</mark>
+  * Aries Framework Go
+6. When it comes to managing upgrades to Aries agents, what are the most important mechanisms you should use? Select all answers that apply.
+  * <mark>The Aries Interop Profile (AIP)</mark> (provides a way to target the same versions of protocols used)
+  * <mark>The Community Coordinated Update (CCU)</mark> (provides a way to make breaking changes to protocols)
+  * DIDComm
+  * ACA-Py
+7. It is extremely important to back up your agent’s storage for the following reasons. Select all answers that apply.
+  * <mark>It contains the data necessary to interact with other agents</mark>
+  * <mark>It contains private keys</mark>
+  * It contains the genesis file for connecting to a ledger
+  * <mark>If you lose it, you can no longer issue credentials</mark>
+8. Which of these Aries RFCs occur only in AIP 2.0? Select all answers that apply.
+  * RFC 0160 Connections
+  * <mark>RFC 0023 DID Exchange</mark>
+  * <mark>RFC 0434 Out-of-Band</mark>
+  * RFC 0095 Basic Message
+  * RFC 0005 Protocols
+9. A multi-tenant Aries instance supports multiple separate agents, each with their own secure storage. <mark>True</mark> or False?
+10. In DIDComm, the term ______ is used to indicate that the message is being routed through one or more additional agents without the knowledge of the sender.
+  * mediator
+  * <mark>relay</mark>
+  * sender
+  * router
+11. Mediators and relays are Aries agents. <mark>True</mark> or False?
+12. Mobile applications do not have a physical endpoint that remote applications can use. As a result, if you are thinking about creating a mobile agent, which of the following do you have to consider. Select all answers that apply.
+  * How to backup your mobile agent storage
+  * <mark>How and where to deploy a cloud-based mediator agent</mark>
+  * <mark>How messages will be handled when the phone is offline</mark>
+  * How to use Google and Apple to relay messages
+13. The Aries Toolbox is:
+  * <mark>A desktop tool that allows a user to control the behavior of running Aries agents</mark>
+  * An HTTP interface used by a typical ACA-Py controller
+  * A GUI that is the basis for Aries mobile apps
+  * A generic OpenAPI interface used to accomplish certain agent-related functions
+14. What is different about the "invitation" message in the "connection" protocol from other Aries protocol message?
+  * Nothing, it is just like any Aries message
+  * <mark>It does not use DIDComm encryption when sent</mark>
+  * It starts the protocol
+  * It is not formatted as JSON
+15. The Aries Toolbox can be used for experimenting with creating and writing a new schema and credential definition to a test ledger, and then trying out issuing credentials using those objects. <mark>True</mark> or False?
+16. The format of Aries protocol messages is JSON and the `@type` and `@id` items are in every Aries protocol message. <mark>True</mark> or False?
+17. As messages go back and forth between agents to complete an instance of a protocol (e.g. issuing a credential), the ______ decorator data lets the agents know to which protocol instance the message belongs, and the ordering of the message in the overall flow.
+  * <mark>`~thread`</mark>
+  * `~instance`
+  * `~tracing`
+  * `~timing`
+18. Which special message types are used for error handling. Select all answers that apply.
+  * <mark>`ack`</mark>
+  * `acknowledge_msg`
+  * `response`
+  * <mark>`problem_report`</mark>
+19. As of the time of writing this course, which Aries Framework does not use Hyperledger Indy or Ursa:
+  * aries-cloudagent-python
+  * aries-framework-dotnet
+  * <mark>aries-framework-go</mark> (uses [tink](https://github.com/google/tink) and has no ledger)
+  * aries-acapy-controllers
+20. At startup, an Aries issuer agent needs to know what? Select all answers that apply.
+  * <mark>The location of the genesis file for the Indy ledger it will use (if any)</mark>
+  * <mark>How to create DIDs, schema and the credential definition on the ledger</mark>
+  * <mark>The transport endpoints it uses for receiving messages from other agents</mark>
+  * The endpoints of other agents with which it will issue credentials
+  * <mark>Storage options for keys and other data</mark>
+21. What is the VON Network? Select all answers that apply.
+  * <mark>A pre-packaged Indy network build</mark>
+  * <mark>A good place to start to learn about running a local Indy network</mark>
+  * A requirement for running an Aries agent
+  * <mark>A minimal four-node Indy network using docker containers</mark>
+22. The Aries Agent Test Harness is used to run a common set of tests on an Aries agent. True or <mark>False</mark>? (The Aries Agent Test Harness is used to run tests involving multiple test agent implementations to demonstrate interoperability based on Aries Interop Profiles.)
+23. The ______ contains information about the physical endpoints (IP addresses and ports) for some of the nodes in Indy ledger pool, and the cryptographic material necessary to communicate with those nodes.
+  * ledger
+  * <mark>genesis file</mark>
+  * identity owner
+  * agent
+24. Who operates the nodes of an Indy network?
+  * Trustees
+  * Sovrin
+  * <mark>Stewards</mark>
+  * Endorsers
+  * Hyperledger
+25. All Aries agent deployments have two logical components. What are they?
+  * <mark>A framework</mark>
+  * An envelope
+  * A container
+  * <mark>A controller</mark>
+26. In the labs, we used several mechanisms to enable developers to interactively trigger running agents to execute protocols. Select all answers that apply.
+  * HTTP and WebSockets
+  * <mark>Aries Toolbox</mark>
+  * <mark>OpenAPI/Swagger</mark>
+  * VON Network’s Web Server
+27. AIP 2.0 introduced the ability to use verifiable credentials that use the BBS+ Signature suite. What features do such verifiable credentials support? Select all answers that apply. (cf https://www.evernym.com/blog/bbs-verifiable-credentials/)
+  * <mark>Selective disclosure</mark>
+  * ZKP Predicates
+  * <mark>The W3C Verifiable Credential Standard</mark>
+  * <mark>JSON-LD</mark>
+  * Ledger-based Credential Definitions
+28. What is the GitHub repository that provides a reference about Aries protocols?
+  * `aries-cloudagent-python`
+  * `indy-sdk`
+  * `aries-framework-dotnet`
+  * `aries-protocol-test-suite`
+  * <mark>`aries-rfcs`</mark>
+29. What information is not included in the specification of an Aries Protocol?
+  * Message types
+  * <mark>Business rules</mark>
+  * Roles
+  * States
+  * Version
+30. From which movie comes the (in)famous Faber College?
+  * Dumb and Dumber
+  * Bernie’s Weekend II
+  * <mark>Animal House</mark>
+  * Porky’s
+  * Revenge of the Nerds
