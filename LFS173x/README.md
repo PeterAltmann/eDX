@@ -213,7 +213,7 @@ Hyperledger Aries uses the term agent to mean the software that interacts with o
 
 This chapter has largely been a review of the concepts introduced in the previous course. Its purpose is to provide context for why you want to become an Aries developer and recaps some of the terminology and concepts behind decentralized identity solutions that were discussed in the prerequisite course: "Introduction to Hyperledger Sovereign Identity Blockchain Solutions: Indy, Aries and Ursa" (LFS172x).
 
-# Chapter 2. Exploring Aries and Ares Agents
+# Chapter 2. Exploring Aries and Aries Agents
 
 ## Introduction
 
